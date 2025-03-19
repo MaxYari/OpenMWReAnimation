@@ -558,7 +558,7 @@ end
 module.stringStartsWith = stringStartsWith
 
 -- Animation-related helper functions
-local attackTypes = { "chop", "slash", "thrust" }
+local attackTypes = { "chop", "slash", "thrust", "shoot" }
 local function isAttackType(key, suffix)
     if suffix then suffix = " " .. suffix end
     if not suffix then suffix = "" end
