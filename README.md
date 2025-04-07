@@ -63,6 +63,7 @@ Generic conditional animation override:
 local I = require('openmw.interfaces')
 
 I.ReAnimation.addAnimationOverride({
+    id = "myDaggerSneakOverride"
     parent = "idle1s",
     groupname = "idle1ssneak",
     armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
@@ -86,6 +87,12 @@ This registers a special "idle1ssneak" idle animation that will play whenever th
 `parentOptions` and the return value of the `options` method are of the same format as [playBlended options parameter](https://openmw.readthedocs.io/en/latest/reference/lua-scripting/openmw_animation.html##(animation).playBlended). 
 
 This is a very raw override method that can barely be considered a properly polished API. It provides a lot of flexibility but also requires some understanding of how the OpenMW animation API functions. The best way to use this method is to pick one of the override definitions from AnimationOverrides.lua as a base for your own.
+
+Added overrides can be removed using 
+```Lua
+I.ReAnimation.removeAnimationOverride("my_override_id")
+```
+Where `my_override_id` is an id you provided to the override in `addAnimationOverride` (if you provided such an id at all).
 
 
 ## Appreciation

@@ -200,7 +200,7 @@ return {
         ARMATURE_TYPE = gutils.ARMATURE_TYPE,
         addAnimationOverride = addAnimationOverride,        
         addAltAttackAnimations = addAltAttackAnimations,
-        removeAnimationOverrides = removeAnimationOverride,
+        removeAnimationOverride = removeAnimationOverride,
         animations = animations,
         gutils = gutils
     },
