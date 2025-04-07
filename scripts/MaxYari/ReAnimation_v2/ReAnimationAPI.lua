@@ -32,6 +32,17 @@ local function addAnimationOverride(anim)
     end
 end
 
+local function removeAnimationOverride(id)
+    if not id then return end
+    for i, anim in ipairs(animations) do
+        if anim.id == id then
+            table.remove(animations, i)
+            return true
+        end
+    end
+    return false
+end
+
 
 --[[ 
 params example:
@@ -51,16 +62,31 @@ local function addAltAttackAnimations(params)
     end
     
     local override = {
+        id = "AltAttack",
         parent = params.parentAttackGroupname,
         groupname = params.altAttackGroupname,
         armatureType = params.armatureType,
-        condition = function(self)       
-            local startKey = self.parentOptions.startkey or self.parentOptions.startKey
-            if not gutils.isAttackType(startKey) then
-                return false
+        preOverride = function(self, pOptions)
+            local startKey = pOptions.startkey or pOptions.startKey
+            local stopKey = pOptions.stopkey or pOptions.stopKey
+            
+            -- Alternate attacks
+            if gutils.isAttackTypeStart(startKey) then
+                
+                local key = self.parent .. gutils.isAttackType(startKey)
+                if not attackCounters[key] then attackCounters[key] = -1 end
+                attackCounters[key] = (attackCounters[key] + 1) % 2
+
+                if attackCounters[key] == 1 then
+                    self.groupname = params.altAttackGroupname
+                else
+                    self.groupname = nil
+                end
             end
-            local counterKey = self.parent .. gutils.isAttackType(startKey)
-            return attackCounters[counterKey] == 1
+        end,
+        condition = function(self)  
+            local startKey = self.parentOptions.startkey or self.parentOptions.startKey     
+            return gutils.isAttackType(startKey)
         end,
         options = function(self, pOptions)
             local opts = gutils.cloneAnimOptions(pOptions)
@@ -100,22 +126,29 @@ I.AnimationController.addPlayBlendedAnimationHandler(function(groupname, options
     end
 
     -- Count attacks
-    if gutils.isAttackTypeStart(startKey) then
+    --[[ if gutils.isAttackTypeStart(startKey) then
         local key = groupname .. gutils.isAttackType(startKey)
         if not attackCounters[key] then attackCounters[key] = -1 end
         attackCounters[key] = (attackCounters[key] + 1) % 2
-    end
+    end ]]
 
     -- Starting override anims
     for _, anim in ipairs(animations) do
-        if animation.hasGroup(omwself, anim.groupname) and anim.startOnAnimEvent
-            and anim.parent == groupname and gutils.isMatchingArmatureType(anim.armatureType) then
+        if anim.startOnAnimEvent and anim.parent == groupname and gutils.isMatchingArmatureType(anim.armatureType) then
             local shouldStart = anim:condition()
             if shouldStart then
                 -- print("Overriding " .. anim.parent .. " with " .. anim.groupname)
-                animation.cancel(omwself, anim.groupname)
-                I.AnimationController.playBlendedAnimation(anim.groupname, anim:options(options))
-                anim.running = true
+                -- End this override's groupname and run pre-override pass. 
+                -- Reminder: pre-override pass is there to allow for dynamic anim.groupname changes, i.e
+                -- it should be supported for anim.preOverride to change its own anim.groupname.
+                if anim.groupname then animation.cancel(omwself, anim.groupname) end
+                if anim.preOverride then anim:preOverride(options) end
+
+                -- Play the override!
+                if anim.groupname and animation.hasGroup(omwself, anim.groupname) then 
+                    I.AnimationController.playBlendedAnimation(anim.groupname, anim:options(options)) 
+                    anim.running = true
+                end
             end
         end
     end
@@ -165,8 +198,11 @@ return {
     interface = {
         version = 2.5,
         ARMATURE_TYPE = gutils.ARMATURE_TYPE,
-        addAnimationOverride = addAnimationOverride,
-        addAltAttackAnimations = addAltAttackAnimations
+        addAnimationOverride = addAnimationOverride,        
+        addAltAttackAnimations = addAltAttackAnimations,
+        removeAnimationOverrides = removeAnimationOverrides,
+        animations = animations,
+        gutils = gutils
     },
     engineHandlers = {
         onUpdate = onUpdate,
