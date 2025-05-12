@@ -116,7 +116,7 @@ local animations = {
         startOnUpdate = true
     },
     {
-        parent = {"idle1s","idle1ssneak"},
+        parent = {"idle1s","idle1ssneak","jump1s"},
         groupname = "idleshield",
         armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
         condition = function()

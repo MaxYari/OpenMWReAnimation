@@ -85,7 +85,8 @@ local function addAltAttackAnimations(params)
             end
         end,
         condition = function(self)  
-            local startKey = self.parentOptions.startkey or self.parentOptions.startKey     
+            local startKey = self.parentOptions.startkey or self.parentOptions.startKey
+            if startKey == nil then return false end -- A User reported an error there, with startKey being nil. No idea why, but heres a crappy fix anyway.
             return gutils.isAttackType(startKey)
         end,
         options = function(self, pOptions)
