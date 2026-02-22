@@ -50,12 +50,15 @@ local I = require('openmw.interfaces')
 I.ReAnimation.addAltAttackAnimations({
     parentAttackGroupname = "weapononehand",
     altAttackGroupname = "weapononehand1",
-    armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson
+    armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
+    stance = I.ReAnimation.STANCE.Weapon
 })
 ```
 
 This function call will register the "weapononehand1" animation group (which you supposedly created) as a source of alternative chop/slash/thrust animations that will be played alongside the vanilla weapononehand group chop/slash/thrust animations in an alternating fashion. The timing of text keys within each of the alt attacks should match the original attack text key timings perfectly, i.e., the same exact duration of a windup, attack, follow-through, etc. 
 This is important due to the fact that the provided alt animations don't actually play _instead_ of the vanilla animations; they play "on top" of them with the vanilla animation being covertly hidden. Vanilla text keys (and not the alt animation text keys) are actually responsible for triggering damage and transitioning between different stages of the attack animation.
+
+Note that `armatureType` and `stance` properties define on which armature and in which stance this override will be active
 
 Generic conditional animation override:
 
@@ -67,6 +70,7 @@ I.ReAnimation.addAnimationOverride({
     parent = "idle1s",
     groupname = "idle1ssneak",
     armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
+    stance = I.ReAnimation.STANCE.Weapon,
     condition = function(self)
         return omwself.controls.sneak
     end,
@@ -98,6 +102,8 @@ Where `my_override_id` is an id you provided to the override in `addAnimationOve
 ## Appreciation
 
 Thanks to [fallchildren](https://github.com/fallchildren2) for code contributions and motivating me to expose a (somewhat) proper API. 
+
+Thanks to [taitechnic](https://forums.nexusmods.com/profile/193965921-taitechnic/) and [S3ctor](https://github.com/magicaldave) for the help in optimisation.
 
 My thanks go to OpenMW discord community for massively helping me overcome a multitude of Lua hurdles, testing and providing feedback.
 

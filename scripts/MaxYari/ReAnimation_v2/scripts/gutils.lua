@@ -212,9 +212,14 @@ local function findField(dictionary, value)
 end
 module.findField = findField
 
-local function cache(fn, delay)
+local function cachedFunction(fn, delay, startDelay)
     delay = delay or 0.25 -- default delay is 0.25 seconds
+    local currentTime = core.getRealTime()
     local lastExecution = 0
+    if startDelay then
+        lastExecution = currentTime + startDelay
+    end
+
     local c1, c2 = nil, nil
 
     return function(...)
@@ -228,8 +233,7 @@ local function cache(fn, delay)
         return c1, c2, "new"
     end
 end
-module.cache = cache
-
+module.cachedFunction = cachedFunction
 
 local function randomDirection()
     -- Author: ChatGPT 2024
@@ -623,13 +627,24 @@ local ARMATURE_TYPE = {
 }
 module.ARMATURE_TYPE = ARMATURE_TYPE
 
-local function isMatchingArmatureType(armType)
-    if armType == ARMATURE_TYPE.Any or not armType then return true end
-    local isInFirstPerson = (camStatus and camera.getMode() == camera.MODE.FirstPerson)
-    return (armType == ARMATURE_TYPE.FirstPerson and isInFirstPerson) or
-        (armType == ARMATURE_TYPE.ThirdPerson and not isInFirstPerson)    
+local STANCE = {
+    Nothing = types.Actor.STANCE.Nothing,
+    Spell = types.Actor.STANCE.Spell,
+    Weapon = types.Actor.STANCE.Weapon,
+    Any = "Any"
+}
+module.STANCE = STANCE
+
+local function getArmatureType()
+    if not camStatus then return ARMATURE_TYPE.ThirdPerson end
+    local mode = camera.getMode()
+    if mode == camera.MODE.FirstPerson then
+        return ARMATURE_TYPE.FirstPerson
+    else
+        return ARMATURE_TYPE.ThirdPerson
+    end
 end
-module.isMatchingArmatureType = isMatchingArmatureType
+module.getArmatureType = getArmatureType
 --------------------------------------------------------
 
 return module
