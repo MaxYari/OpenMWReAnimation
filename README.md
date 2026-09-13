@@ -37,7 +37,8 @@ Note: Gifs are fairly low fps, it looks even better in-game.
 
 ## How to install
 
-- Download this repository as an archive and install using Mod Organizer 2. Or manually place the contents of this repository into your ".../Morrowind/Data Files" folder. 
+- Download this repository as an archive and drag and drop it into your mod organiser of choice (e.g Mod Organiser 2 on Windows or https://github.com/grazelandsnomad/nerevarine_organizer/releases/tag/v0.70 Nerevarine Organiser on Linux). 
+**--Or--** manually place the contents of this repository into your ".../Morrowind/Data Files" folder. 
 - Enable the mod's .omwscript files in "Content Files" tab of the OpenMW launcher ( `ReAnimation_API` and `ReAnimation_v3` at the time of writing). 
 - If you _only_ want to use ReAnimation as an API  for another mod (i.e only as a dependency that doesnt add any animations on its own) - only enable `ReAnimation_API` AND delete "Animations" folder from within this mod.
 
@@ -49,16 +50,72 @@ Compatible with practically any other animation mod. ReAnimation uses OpenMW sys
 
 [Better Bodies](https://www.nexusmods.com/morrowind/mods/48387) - causes a left-shoulder's sharp polygon to protrude on the left side of the screen while having naked arms (as well as with some common shirts) and sneaking with a dagger. Most noticeable with a [Low First Person Sneak Mode](https://www.nexusmods.com/morrowind/mods/43108). This is most likely an issue on the side of Better Bodies. Until it's fixed - simply wear a peace of armor on your left shoulder that doesn't bug out.
 
+[TODO] Maybe that dynamic lua sneak mod that shrinks the player fixes the issue 
+
 ## Vanilla/MWSE compatibility
 
-Not currently compatible. If you would like to port the scripting part to MWSE - please do, I'm not familiar with MWSE and am not planning to change that.
+Only v1 version of this mod (far fewer animations in comparison to v3, no alternating attacks e.t.c) is available for vanilla Morrowind, you can find v1 in the downloads section.
+v3 is not currently compatible. If you would like to port the scripting part to MWSE - please do, I'm not familiar with MWSE and am not planning to change that.
 However, if possible - keep this mod as a dependency, instead of reuploading the whole thing.
 
+[TODO] How to make it work with that first person fullbody mod?
+
 ## For Modders
+
+### Basics
 
 ReAnimation exposes an API (Interface for other mods to use). The interface works around some of the OpenMW Lua animation API limitations and provides a simple way of adding alternating attack animations for different weapons, as well as a slightly less simple way of defining generic conditional animation overrides.
 
 To ensure that the ReAnimation interface is available, your mod should either be loaded after the ReAnimation API, or you should interact with the interface from inside the update function instead of the global scope. But in the latter case, ensure that you register your animations/overrides only once, and not every update tick.
+
+#### Attack variants
+
+Is a way to register alternating ("alt" below) and substitute ("sub" below) attack animations. Alternating attadcks play in alternating (duh) fashion, while sub attacks are a random replacement of an attack animation. As a simple example - you might have 2 variants of a downward chop animations and 1 variant of upward swing, you want downchop to always be followerd by up swing, but you also want a random chop to be used every time for your down chop. In this example your chop variants are sub attacks while your upward swing is an alt attack. Below example setups exactly this kind of scenario for two-handed chops.
+
+```Lua
+local I = require('openmw.interfaces')
+
+I.ReAnimation.addAttackVariants({
+    id = "MyTwoHandAttacks",                  -- optional, for removeAnimationOverride
+    parentAttackGroupname = "weapontwohand",
+    armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
+    subAttackMode = I.ReAnimation.SUB_ATTACK_MODE.Random,  -- or RoundRobin
+    condition = function() return not I.ReAnimation.isEquippedWeapon("katana") end, -- optional
+    attacks = {
+        chop   = { { "weapontwohand", "weapontwohandsub" }, { "weapontwohandalt" } },
+        slash  = { { "weapontwohand" }, { "weapontwohandalt" } },
+        thrust = { { "weapontwohand" }, { "weapontwohandalt" } },
+    },
+})
+```
+heare "weapontwohand", "weapontwohandalt" and "weapontwohandsub" are names of animation groups to which your attack animations belong. I.e for chops: vanilla chop is stored in weapontwohand, alt chop is stored in weapontwohandalt group (which i simply made up) and, similarly, sub chop is stored in weapontwohandsub. It IS important that all extra attack animations belong to their own groups distinct in name from the vanilla attack group and each other. It is fine to keep different attack types (chop/slash/thrust) under the same groupname as it is done in the example above.
+
+Here's also an AI slop summary in case I missed something since I dont even want to bother re-reading the things that I wrote above:
+- **The outer list alternates.** Attacks of one type step through it in order, so a single step means no alternation. If that attack type isn't used for `sequenceResetTime` seconds (default 3), the sequence starts over from the first step.
+- **The inner list holds interchangeable variants.** `subAttackMode` picks one per attack: `Random` (the default; `randomMaxRepeats`, default 3, caps how often the same one comes up in a row, and 0 removes the cap) or `RoundRobin` (in the listed order).
+- **Listing the parent group itself plays the vanilla animation**, so vanilla can be one of the options. Attack types you leave out are not touched.
+- **`condition` gates the whole set**, e.g. by the equipped weapon (`isEquippedWeapon`, `getEquippedWeaponId`). Several sets can share one parent group, as long as their conditions are never true at the same time.
+- **Text key timings must match the parent's exactly**, the same as for alt attacks: a variant plays on top of the hidden vanilla attack, whose keys still trigger hits and move the attack through its stages.
+
+#### Tails
+
+When an attack reaches its follow-through stop (`<type> [small|medium|large] follow stop`), ReAnimation looks for a group named `<attack group>extra` with a `<Type> Tail Start` and `<Type> Tail Stop` key, and plays that section if both exist. For example, `weapontwohand`'s chop plays the `Chop Tail Start` to `Chop Tail Stop` section of `weapontwohandextra`. Variant groups get their own, so `weapontwohandsub` uses `weapontwohandsubextra`.
+
+A tail plays on the upper body only, at the attack's speed. Its priority sits above movement but below attacks, so the next attack, or a stagger from a hit, cuts it short. For a seamless hand-off, make the transition instant in your animation's blend rules YAML:
+
+```yaml
+blending_rules:
+  - from: "*:*follow start"
+    to: "*:*tail start"
+    easing: "linear"
+    duration: 0
+```
+
+Other additions, such as `addKeyTriggeredAnimation` and the equipped-item helpers, are documented in the comments in `ReAnimationAPI.lua`.
+
+#### Old way to register attack variants
+
+This still works and is shorter than the new way of attack variant registration, but is not as flexible and assumes that you implemented alt animations for all attack types of this weapon.
 
 Registering alternating attack animations for a one-handed weapon group:
 
@@ -78,7 +135,7 @@ This is important due to the fact that the provided alt animations don't actuall
 
 Note that `armatureType` and `stance` properties define on which armature and in which stance this override will be active
 
-Generic conditional animation override:
+#### Generic conditional animation override:
 
 ```Lua
 local I = require('openmw.interfaces')
