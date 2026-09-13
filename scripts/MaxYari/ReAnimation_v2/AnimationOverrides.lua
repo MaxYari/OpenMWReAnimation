@@ -3,6 +3,7 @@ local mp = "scripts/MaxYari/ReAnimation_v2/"
 local omwself = require('openmw.self')
 local types = require('openmw.types')
 local animation = require('openmw.animation')
+local vfs = require('openmw.vfs')
 local I = require('openmw.interfaces')
 
 local animManager = require(mp .. "scripts/anim_manager")
@@ -95,6 +96,13 @@ end
 -- weapon, short blades, blunt and axes included. Attack variants keep their hidden parent group
 -- playing, so alt attacks count as their parent - alt and star throws as throwweapon, the alternate
 -- fists as handtohand.
+-- With the FBA Compatibility folder installed the movement groups carry 3rd-person legs and root
+-- motion on the lower body, which a bounce would take over: the legs would fall back to the rig
+-- pose, and with no root motion under a movement group that has velocity the player stops dead.
+-- Movement keeps the lower body during attacks anyway (the attack's lower body priority is below
+-- Movement), so there the bob comes from the 3rd-person stride.
+local FBA_COMPAT = vfs.fileExists("ReAnimation_FBA_Compatibility.txt")
+
 local BOUNCE_V2_ATTACK_GROUPS = { "weapononehand" }
 local BOUNCE_V3_ATTACK_GROUPS = { "weapontwohand", "weapontwowide", "throwweapon", "crossbow", "handtohand" }
 
@@ -389,7 +397,7 @@ local animations = {
         groupname = "runbounce",
         armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
         condition = function()
-            return isAnyPlaying(BOUNCE_V2_ATTACK_GROUPS) and selfActor:getCurrentSpeed() > 1
+            return not FBA_COMPAT and isAnyPlaying(BOUNCE_V2_ATTACK_GROUPS) and selfActor:getCurrentSpeed() > 1
         end,
         stopCondition = function(self)
             return not self:condition()
@@ -406,7 +414,7 @@ local animations = {
         groupname = "runbouncev3",
         armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
         condition = function()
-            return isAnyPlaying(BOUNCE_V3_ATTACK_GROUPS) and selfActor:getCurrentSpeed() > 1
+            return not FBA_COMPAT and isAnyPlaying(BOUNCE_V3_ATTACK_GROUPS) and selfActor:getCurrentSpeed() > 1
         end,
         stopCondition = function(self)
             return not self:condition()
