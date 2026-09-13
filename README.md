@@ -37,7 +37,7 @@ Note: Gifs are fairly low fps, it looks even better in-game.
 
 ## How to install
 
-- Download this repository as an archive and drag and drop it into your mod organiser of choice (e.g Mod Organiser 2 on Windows or https://github.com/grazelandsnomad/nerevarine_organizer/releases/tag/v0.70 Nerevarine Organiser on Linux). 
+- Download this repository as an archive and drag and drop it into your mod organiser of choice (e.g [Mod Organizer 2](https://github.com/ModOrganizer2/modorganizer/releases) on Windows or [Nerevarine Organizer](https://github.com/grazelandsnomad/nerevarine_organizer/releases/tag/v0.70) on Linux). 
 **--Or--** manually place the contents of this repository into your ".../Morrowind/Data Files" folder. 
 - Enable the mod's .omwscript files in "Content Files" tab of the OpenMW launcher ( `ReAnimation_API` and `ReAnimation_v3` at the time of writing). 
 - If you _only_ want to use ReAnimation as an API  for another mod (i.e only as a dependency that doesnt add any animations on its own) - only enable `ReAnimation_API` AND delete "Animations" folder from within this mod.
