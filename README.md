@@ -15,7 +15,7 @@ And now I also have a cool donation banner:
 
 <p><a href="https://ko-fi.com/maxyari"><img src="imgs/morrowind_kofi_banner_left_half_bright124.gif" width="25.72%" align="top" alt="Support me on Ko-fi"></a><a href="https://ko-fi.com/maxyari"><img src="imgs/banner_right.png" width="73.88%" align="top" alt="Support me on Ko-fi"></a><br><a href="https://ko-fi.com/maxyari"><img src="imgs/banner_glow.png" width="99.6%" align="top" alt=""></a></p>
 
-If you are reading this - know that you are one of the truly early birds to this update as I have literally not announced it anywhere yet. Thank you for being around, and have fun :) 
+Thank you for being around, and have fun :) 
 
 **=== The rest of this description will be updated later ===**
 
