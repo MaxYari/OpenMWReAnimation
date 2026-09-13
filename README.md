@@ -1,7 +1,7 @@
 # ReAnimation - first-person - v3: Complete
 ![alt text](imgs/preview.png)
 
-An immersive reimagining of absolute most of the TES3: Morrowind 1st-person animations, as well as a massive extension of those with alternating attacks (you won't spam the same attack animation anymore) and sneak animations.
+An immersive reimagining of an absolute most of the TES3: Morrowind 1st-person animations, as well as a massive extension with alternating attack and sneak animations (no more repetitive attack animations!).
 
 Twice as much animation juice as the original game, if not more. 
 
