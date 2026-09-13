@@ -89,14 +89,18 @@ local function syncShieldSpeed(self)
     end
 end
 
--- runbounce keeps the stride's spine bob going while an attack of one of these plays during
--- movement. Attack variants keep their hidden parent group playing, so alt and star throws count
--- as throwweapon.
-local BOUNCE_ATTACK_GROUPS = { "weapononehand", "weapontwohand", "weapontwowide", "throwweapon", "crossbow" }
+-- The bounce keeps the stride's spine bob going while an attack plays during movement. There are
+-- two: runbounce (xRunBounceV2.kf) for the Reanimation v2 one-handed set, whose poses sit on the v2
+-- pelvis, and runbouncev3 for every v3 set. Bows get neither. weapononehand covers every one-handed
+-- weapon, short blades, blunt and axes included. Attack variants keep their hidden parent group
+-- playing, so alt attacks count as their parent - alt and star throws as throwweapon, the alternate
+-- fists as handtohand.
+local BOUNCE_V2_ATTACK_GROUPS = { "weapononehand" }
+local BOUNCE_V3_ATTACK_GROUPS = { "weapontwohand", "weapontwowide", "throwweapon", "crossbow", "handtohand" }
 
-local function isBounceAttackPlaying()
-    for i = 1, #BOUNCE_ATTACK_GROUPS do
-        if animManager.isPlaying(BOUNCE_ATTACK_GROUPS[i]) then return true end
+local function isAnyPlaying(groups)
+    for i = 1, #groups do
+        if animManager.isPlaying(groups[i]) then return true end
     end
     return false
 end
@@ -126,6 +130,36 @@ local function syncBounceSpeed(self)
         animation.setSpeed(omwself, self.groupname, speed)
         self.syncedSpeed = speed
     end
+end
+
+-- Shared by both bounces. They share the priority set too, which is safe only because their attack
+-- groups never play together - the engine evicts one of two states whose sets are equal.
+local function bounceOptions(self)
+    self.syncedSpeed = nil
+    -- camelCase only: playBlended reads blendMask/startKey/... and silently ignored the
+    -- lowercase keys this used to pass, so it played on all bones, auto-disabling, unlooped.
+    return {
+        startKey = "start",
+        stopKey = "stop",
+        loops = 999,
+        forceLoop = true,
+        autoDisable = false,
+        -- Not a flat Movement + 1: that equals Hit's priority on every bone group, and the
+        -- engine evicts any state whose whole set equals the one being played
+        -- (animation.cpp:905) - a hit erased the bounce, and the bounce restarting on the
+        -- next update erased the hit recoil. Only the lower body is blended, so only its
+        -- value shows: one above movement, as before. It ties with Hit there, and the tie
+        -- goes to the state first in name order, so the hit* recoil keeps the spine and the
+        -- bob resumes after it.
+        priority = {
+            [animation.BONE_GROUP.LeftArm] = animation.PRIORITY.Movement,
+            [animation.BONE_GROUP.RightArm] = animation.PRIORITY.Movement,
+            [animation.BONE_GROUP.Torso] = animation.PRIORITY.Movement,
+            [animation.BONE_GROUP.LowerBody] = animation.PRIORITY.Movement + 1,
+        },
+        blendMask = animation.BLEND_MASK.LowerBody,
+        speed = bounceSpeed()
+    }
 end
 
 
@@ -346,46 +380,38 @@ local animations = {
         startOnAnimEvent = true,
         startOnUpdate = true
     },
+    -- Both bounces are polled every frame while not playing, so each checks its attack groups first
+    -- (a Lua-side lookup) and only then asks the engine for the speed.
     {
         parent = nil,
-        -- The Reanimation v3 bounce: the old runbounce held the v2 pelvis (5.55 deg off v3), which
-        -- swung the whole torso and weapon aside. This one keys only the v3 pelvis and the spine bob.
-        groupname = "runbouncev3",
+        -- The Reanimation v2 bounce, for the v2 one-handed set: its poses sit on the v2 pelvis,
+        -- which the v3 bounce would swing aside.
+        groupname = "runbounce",
         armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
         condition = function()
-            return selfActor:getCurrentSpeed() > 1 and isBounceAttackPlaying()
+            return isAnyPlaying(BOUNCE_V2_ATTACK_GROUPS) and selfActor:getCurrentSpeed() > 1
         end,
         stopCondition = function(self)
             return not self:condition()
         end,
-        options = function(self, pOptions)
-            self.syncedSpeed = nil
-            -- camelCase only: playBlended reads blendMask/startKey/... and silently ignored the
-            -- lowercase keys this used to pass, so it played on all bones, auto-disabling, unlooped.
-            return {
-                startKey = "start",
-                stopKey = "stop",
-                loops = 999,
-                forceLoop = true,
-                autoDisable = false,
-                -- Not a flat Movement + 1: that equals Hit's priority on every bone group, and the
-                -- engine evicts any state whose whole set equals the one being played
-                -- (animation.cpp:905) - a hit erased the bounce, and the bounce restarting on the
-                -- next update erased the hit recoil. Only the lower body is blended, so only its
-                -- value shows: one above movement, as before. It ties with Hit there, and the tie
-                -- goes to the state first in name order, so the hit* recoil keeps the spine and the
-                -- bob resumes after it.
-                priority = {
-                    [animation.BONE_GROUP.LeftArm] = animation.PRIORITY.Movement,
-                    [animation.BONE_GROUP.RightArm] = animation.PRIORITY.Movement,
-                    [animation.BONE_GROUP.Torso] = animation.PRIORITY.Movement,
-                    [animation.BONE_GROUP.LowerBody] = animation.PRIORITY.Movement + 1,
-                },
-                blendMask = animation.BLEND_MASK.LowerBody,
-                speed = bounceSpeed()
-            }
-            --opts.priority[animation.BONE_GROUP.Torso] = opts.priority[animation.BONE_GROUP.Torso] + 1
+        options = bounceOptions,
+        onUpdate = syncBounceSpeed,
+        startOnUpdate = true
+    },
+    {
+        parent = nil,
+        -- The Reanimation v3 bounce: the v2 one holds the v2 pelvis (5.55 deg off v3), which swings
+        -- the whole torso and weapon aside on v3 poses. This one keys only the v3 pelvis and the
+        -- spine bob.
+        groupname = "runbouncev3",
+        armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
+        condition = function()
+            return isAnyPlaying(BOUNCE_V3_ATTACK_GROUPS) and selfActor:getCurrentSpeed() > 1
         end,
+        stopCondition = function(self)
+            return not self:condition()
+        end,
+        options = bounceOptions,
         onUpdate = syncBounceSpeed,
         startOnUpdate = true
     },
