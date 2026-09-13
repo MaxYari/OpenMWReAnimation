@@ -1,5 +1,23 @@
-# ReAnimation - first-person - v2: Rogue
-An immersive reimagining of (some) of the TES3: Morrowind 1st-person animations. Developed for OpenMW engine.
+# ReAnimation - first-person - v3: Complete
+![alt text](imgs/preview.png)
+
+An immersive reimagining of absolute most of the TES3: Morrowind 1st-person animations, as well as a massive extension of those with alternating attacks (you won't spam the same attack animation anymore) and sneak animations.
+
+Twice as much animation juice as the original game, if not more. 
+
+Developed for OpenMW engine.
+
+**v3: it  is  out  ba-beeeey!!!**
+
+And it is complete. Animation sets for all the weapon types as well as h2h got remade and expanded. Only spellcasting animations are untouched since MCAR already provides a good set of those. Go and play the hell out of it!
+
+And now I also have a cool donation banner:
+
+<p><a href="https://ko-fi.com/maxyari"><img src="imgs/morrowind_kofi_banner_left_half_bright124.gif" width="25.72%" align="top" alt="Support me on Ko-fi"></a><a href="https://ko-fi.com/maxyari"><img src="imgs/banner_right.png" width="73.88%" align="top" alt="Support me on Ko-fi"></a><br><a href="https://ko-fi.com/maxyari"><img src="imgs/banner_glow.png" width="99.6%" align="top" alt=""></a></p>
+
+If you are reading this - know that you are one of the truly early birds to this update as I have literally not announced it anywhere yet. Thank you for being around, and have fun :) 
+
+**=== The rest of this description will be updated later ===**
 
 v2: Rogue includes: 
 - All ReAnimation first-person v1 animations.
@@ -20,7 +38,7 @@ Note: Gifs are fairly low fps, it looks even better in-game.
 ## How to install
 
 - Download this repository as an archive and install using Mod Organizer 2. Or manually place the contents of this repository into your ".../Morrowind/Data Files" folder. 
-- Enable the mod's .omwscript files in "Content Files" tab of the OpenMW launcher ( `ReAnimation_API` and `ReAnimation_v2_Rogue` at the time of writing). 
+- Enable the mod's .omwscript files in "Content Files" tab of the OpenMW launcher ( `ReAnimation_API` and `ReAnimation_v3` at the time of writing). 
 - If you _only_ want to use ReAnimation as an API  for another mod (i.e only as a dependency that doesnt add any animations on its own) - only enable `ReAnimation_API` AND delete "Animations" folder from within this mod.
 
 Have fun!
