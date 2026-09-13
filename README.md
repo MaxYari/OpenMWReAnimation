@@ -1,66 +1,70 @@
 # ReAnimation - first-person - v3: Complete
 ![alt text](imgs/preview.png)
 
-An immersive reimagining of an absolute most of the TES3: Morrowind 1st-person animations, as well as a massive extension with alternating attack and sneak animations (no more repetitive attack animations!).
-
-Twice as much animation juice as the original game, if not more. 
-
-Developed for OpenMW engine.
-
 **v3: it  is  out  ba-beeeey!!!**
 
-And it is complete. Animation sets for all the weapon types as well as h2h got remade and expanded. Only spellcasting animations are untouched since MCAR already provides a good set of those. Go and play the hell out of it!
+An immersive reimagining of the TES3: Morrowind 1st-person animations. Punch, slash, chop, shoot and _thrust_ your way through vvardenfell with style! 
 
-And now I also have a cool donation banner:
+Absolute most animations are remade from scratch and many more animations are added to break up the repetative attack animation spam. Furthermore some weapon subtypes received few additional unique animations (shortblades and katanas).
+
+Overall twice as much animation juice as the original game.
+
+Developed for OpenMW engine. Requires OpenMW 0.51+.
+
+## Check out my cool donation banner
+
+I also have a cool donation banner now:
 
 <p><a href="https://ko-fi.com/maxyari"><img src="imgs/morrowind_kofi_banner_left_half_bright124.gif" width="25.72%" align="top" alt="Support me on Ko-fi"></a><a href="https://ko-fi.com/maxyari"><img src="imgs/banner_right.png" width="73.88%" align="top" alt="Support me on Ko-fi"></a><br><a href="https://ko-fi.com/maxyari"><img src="imgs/banner_glow.png" width="99.6%" align="top" alt=""></a></p>
 
 Thank you for being around, and have fun :) 
 
-**=== The rest of this description will be updated later ===**
+## A lot of gifs
 
-v2: Rogue includes: 
-- All ReAnimation first-person v1 animations.
-- Locomotion animations for 1h weapons and bows.
-- Separate set of animations for shortswords/daggers.
-- Separate sets of animations for sneaking with 1h weapons, daggers and bows.
-- Alternating attack animations for 1h weapons.
-- Other smaller niceties.
-- API for modders to use, e.g. to add alt attack animations to other weapon types in 1st and 3rd person.
+That show _some_ of the animations. (Give them some time to load)
 
-![1h walk](/imgs/demo_1h.gif)
-![Dagger walk](/imgs/demo_dagger.gif)
+![Punches](imgs/demo_punches.webp)
+![Spear](imgs/demo_spear.webp)
+![Claymore](imgs/demo_claymore.webp)
+![Staff](imgs/demo_staff.webp)
+![One Handed](imgs/demo_one_handed.webp)
+![Katana](imgs/demo_katana.webp)
+![Crossbow](imgs/demo_crossbow.webp)
+![Throwing Star](imgs/demo_throwing_star.webp)
 ![Bow walk and shoot](/imgs/demo_bow.gif)
-![Alternating attacks](/imgs/demo_1h_attacks.gif)
-
-Note: Gifs are fairly low fps, it looks even better in-game.
 
 ## How to install
 
-- Download this repository as an archive and drag and drop it into your mod organiser of choice (e.g [Mod Organizer 2](https://github.com/ModOrganizer2/modorganizer/releases) on Windows or [Nerevarine Organizer](https://github.com/grazelandsnomad/nerevarine_organizer/releases/tag/v0.70) on Linux). 
-**--Or--** manually place the contents of this repository into your ".../Morrowind/Data Files" folder. 
-- Enable the mod's .omwscript files in "Content Files" tab of the OpenMW launcher ( `ReAnimation_API` and `ReAnimation_v3` at the time of writing). 
-- If you _only_ want to use ReAnimation as an API  for another mod (i.e only as a dependency that doesnt add any animations on its own) - only enable `ReAnimation_API` AND delete "Animations" folder from within this mod.
+1) **With a mod organiser**: Download this repository as an archive and drag and drop it into your mod organiser of choice (e.g [Mod Organizer 2](https://github.com/ModOrganizer2/modorganizer/releases) on Windows or [Nerevarine Organizer](https://github.com/grazelandsnomad/nerevarine_organizer/releases/tag/v0.70) on Linux). 
+**Or manually**: manually place the contents of this repository into your ".../Morrowind/Data Files" folder. 
 
-Have fun!
+2) Enable the mod's .omwscript files in "Content Files" tab of the OpenMW launcher ( `ReAnimation_API` and `ReAnimation_v3` at the time of writing). 
+
+3) If you _only_ want to use ReAnimation as an API  for another mod (i.e only as a dependency that doesnt add any animations on its own) - only enable `ReAnimation_API` AND delete "Animations" folder from within this mod.
+
+4) ... ???
+
+5) PROFIT (Play)
 
 ## Mod compatibility
 
 Compatible with practically any other animation mod. ReAnimation uses OpenMW system of animation overrides and will only override a specific set of animations. Recommended to use with [MCAR](https://www.nexusmods.com/morrowind/mods/48628) for delightfull swimming and casting animations, but will work just fine without it.
 
-[Better Bodies](https://www.nexusmods.com/morrowind/mods/48387) - causes a left-shoulder's sharp polygon to protrude on the left side of the screen while having naked arms (as well as with some common shirts) and sneaking with a dagger. Most noticeable with a [Low First Person Sneak Mode](https://www.nexusmods.com/morrowind/mods/43108). This is most likely an issue on the side of Better Bodies. Until it's fixed - simply wear a peace of armor on your left shoulder that doesn't bug out.
+[Better Bodies](https://www.nexusmods.com/morrowind/mods/48387) (while not wearing shoulder armor) and some custom modded shoulder armors or full body armors display a sharp protruding polygon at on the left side of the screen while sneaking with a dagger. This seem to be more of an asset issue and/or a general messed up way how sneak works under the hood (by essentially dislocating character's neck). _I THINK_ (I havent tested it myself because im lazy) using [Smooth first-person Sneak for OpenMW](https://www.nexusmods.com/morrowind/mods/55241) should completely fix the issue.
 
-[TODO] Maybe that dynamic lua sneak mod that shrinks the player fixes the issue 
 
 ## Vanilla/MWSE compatibility
 
-Only v1 version of this mod (far fewer animations in comparison to v3, no alternating attacks e.t.c) is available for vanilla Morrowind, you can find v1 in the downloads section.
+Only v1 version of this mod (far fewer animations in comparison to v3, no alternating attacks e.t.c) is available for vanilla Morrowind, you can find v1 in the downloads section on nexus.
+
 v3 is not currently compatible. If you would like to port the scripting part to MWSE - please do, I'm not familiar with MWSE and am not planning to change that.
 However, if possible - keep this mod as a dependency, instead of reuploading the whole thing.
 
-[TODO] How to make it work with that first person fullbody mod?
+[TODO] How to make it work with that first person awareness mod?
 
 ## For Modders
+
+Let me preface this by saying that the text below is 75% human written but then never properly proof-read or checked for spelling, and the rest of 25% is AI slop-generated. Nevertheless it should contain all the information you might need, sorry if its too annoying to read :)
 
 ### Basics
 
@@ -99,9 +103,11 @@ Here's also an AI slop summary in case I missed something since I dont even want
 
 #### Tails
 
-When an attack reaches its follow-through stop (`<type> [small|medium|large] follow stop`), ReAnimation looks for a group named `<attack group>extra` with a `<Type> Tail Start` and `<Type> Tail Stop` key, and plays that section if both exist. For example, `weapontwohand`'s chop plays the `Chop Tail Start` to `Chop Tail Stop` section of `weapontwohandextra`. Variant groups get their own, so `weapontwohandsub` uses `weapontwohandsubextra`.
+Essentially an extra part of an attack animation that plays after follow stop (if present). It does not affect gameplay and can be interrupted by starting another attack, but it allowes to make the attack animation ending transition as long and as beautiful as you want it.
 
-A tail plays on the upper body only, at the attack's speed. Its priority sits above movement but below attacks, so the next attack, or a stagger from a hit, cuts it short. For a seamless hand-off, make the transition instant in your animation's blend rules YAML:
+ ReAnimation looks for a group named `<attack group>extra` with a `<Type> Tail Start` and `<Type> Tail Stop` key, and plays that section if both exist. For example, `weapontwohand`'s chop plays the `Chop Tail Start` to `Chop Tail Stop` section of `weapontwohandextra`. Variant groups get their own, so `weapontwohandsub` uses `weapontwohandsubextra`.
+
+For a seamless transition between the follow stop and tail, it is recommended to bundle this blend rule alongside your .kf file:
 
 ```yaml
 blending_rules:
@@ -111,29 +117,7 @@ blending_rules:
     duration: 0
 ```
 
-Other additions, such as `addKeyTriggeredAnimation` and the equipped-item helpers, are documented in the comments in `ReAnimationAPI.lua`.
-
-#### Old way to register attack variants
-
-This still works and is shorter than the new way of attack variant registration, but is not as flexible and assumes that you implemented alt animations for all attack types of this weapon.
-
-Registering alternating attack animations for a one-handed weapon group:
-
-```Lua
-local I = require('openmw.interfaces')
-
-I.ReAnimation.addAltAttackAnimations({
-    parentAttackGroupname = "weapononehand",
-    altAttackGroupname = "weapononehand1",
-    armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
-    stance = I.ReAnimation.STANCE.Weapon
-})
-```
-
-This function call will register the "weapononehand1" animation group (which you supposedly created) as a source of alternative chop/slash/thrust animations that will be played alongside the vanilla weapononehand group chop/slash/thrust animations in an alternating fashion. The timing of text keys within each of the alt attacks should match the original attack text key timings perfectly, i.e., the same exact duration of a windup, attack, follow-through, etc. 
-This is important due to the fact that the provided alt animations don't actually play _instead_ of the vanilla animations; they play "on top" of them with the vanilla animation being covertly hidden. Vanilla text keys (and not the alt animation text keys) are actually responsible for triggering damage and transitioning between different stages of the attack animation.
-
-Note that `armatureType` and `stance` properties define on which armature and in which stance this override will be active
+If you dont know what "blend rules" even mean, honestly - don't bother, you probably will not notice that anything is wrong with the transition.
 
 #### Generic conditional animation override:
 
