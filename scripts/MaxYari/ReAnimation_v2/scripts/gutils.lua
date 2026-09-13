@@ -635,6 +635,15 @@ local STANCE = {
 }
 module.STANCE = STANCE
 
+-- How one of several interchangeable animations is chosen.
+local SUB_ATTACK_MODE = {
+    -- Cycle through the candidates in the order they were declared.
+    RoundRobin = "RoundRobin",
+    -- Pick uniformly at random, optionally capped by randomMaxRepeats.
+    Random = "Random"
+}
+module.SUB_ATTACK_MODE = SUB_ATTACK_MODE
+
 local function getArmatureType()
     if not camStatus then return ARMATURE_TYPE.ThirdPerson end
     local mode = camera.getMode()

@@ -1,0 +1,22 @@
+# Blending into xh2hJump only.
+#
+# Per-animation rules are appended AFTER the global ruleset and the bottom-most
+# matching rule wins, so both rules here outrank animations/animation-config.yaml.
+
+blending_rules:
+  # Anything -> this jump. Covers idle->jump and movement->jump alike, since the
+  # global config has no jump-entry rule and they were falling through to the
+  # generic one. Same long lead-in as the spear (x2wJump) - xh2hJump has the
+  # same key layout as x2cJump and xCrossbowJump (Start and Loop Start at 0,
+  # Loop Stop 0.5, Stop 0.9).
+  - from: "*"
+    to: "jump*"
+    easing: "cubicOut"
+    duration: 1.2
+
+  # Landing. Every jump replay goes through clear-then-play, so the "previous"
+  # state here is the idle/movement underneath, not the jump - "$" never matches.
+  - from: "*"
+    to: "jump*:loop stop"
+    easing: "sineOut"
+    duration: 0.15

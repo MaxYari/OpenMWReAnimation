@@ -1,0 +1,17 @@
+# Blending into xcrossbowMovement only.
+#
+# Per-animation rules are appended AFTER the global ruleset and the bottom-most
+# matching rule wins, so everything here outranks animations/animation-config.yaml.
+
+blending_rules:
+  # Idle -> walk/run. Slow on purpose: the crossbow's idle and locomotion poses
+  # sit far apart and the global 0.25 snaps between them. "idle*" also covers
+  # idlecrossbowsneak.
+  #
+  # Note this also catches changing direction or walk<->run: refreshMovementAnims
+  # clears the old movement before playing the new one, so for that instant the
+  # idle underneath is the "previous" state.
+  - from: "idle*"
+    to: "*"
+    easing: "cubicInOut"
+    duration: 0.4

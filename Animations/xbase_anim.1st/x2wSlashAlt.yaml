@@ -1,0 +1,38 @@
+# Blending into x2wSlashAlt only.
+#
+# Per-animation rules are appended AFTER the global ruleset
+# (AnimBlendRules::addOverrideRules) and the bottom-most matching rule wins, so
+# everything here outranks animations/animation-config.yaml.
+#
+# That is exactly why the three attack-internal rules are repeated below. They
+# live ABOVE this file's rules once concatenated, so without copies here the
+# entry rule would outrank them and the follow-through and tail transitions
+# would stop being instant.
+
+blending_rules:
+  # Entry into this attack. The global 0.1 reads as a snap over the pose gap
+  # these animations open up, particularly when interrupting a tail.
+  - from: "*"
+    to: "*:slash*"
+    easing: "sineOut"
+    duration: 0.2
+
+  # --- copied from the global config so they still outrank the rule above ---
+
+  # Wind-up into the swing proper.
+  - from: "*:*start"
+    to: "*:*attack"
+    easing: "sineOut"
+    duration: 0.05
+
+  # Swing into the follow-through: instant, the poses already line up.
+  - from: "*"
+    to: "*:*follow start"
+    easing: "linear"
+    duration: 0
+
+  # Follow-through into the tail: instant (ReAnimation v3).
+  - from: "*:*follow start"
+    to: "*:*tail start"
+    easing: "linear"
+    duration: 0

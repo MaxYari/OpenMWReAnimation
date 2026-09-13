@@ -1,0 +1,24 @@
+# Blending into xCrossbowSneakIdle only.
+#
+# Per-animation rules are appended AFTER the global ruleset and the bottom-most
+# matching rule wins, so everything here outranks animations/animation-config.yaml.
+
+blending_rules:
+  # Walk/run/sneak -> sneak idle, same as xCrossbowIdle.yaml. idlecrossbowsneak
+  # is a Lua override running above idlecrossbow, so when movement stops it is
+  # the state that takes over. Matched by prefix rather than "*crossbow", which
+  # would also catch the "crossbow" shoot group.
+  - from: "walk*"
+    to: "*"
+    easing: "quartOut"
+    duration: 0.5
+
+  - from: "run*"
+    to: "*"
+    easing: "quartOut"
+    duration: 0.5
+
+  - from: "sneak*"
+    to: "*"
+    easing: "quartOut"
+    duration: 0.5

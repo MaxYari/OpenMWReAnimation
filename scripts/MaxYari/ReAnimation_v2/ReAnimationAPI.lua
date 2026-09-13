@@ -16,12 +16,21 @@ local animations = {}
 local trackedAnims = {}
 local trackedAnims_n = 0
 
-local attackCounters = {}
 local stance = nil
+
+local ATTACK_TYPES = { "chop", "slash", "thrust", "shoot" }
+
+-- Key-triggered animations (see "Key-triggered animation handling" below)
+local keyAnims = {}       -- [parent groupname] = { anim, ... }, everything that was registered
+local keyAnims_n = 0
+local activeKeyAnims = {} -- the same shape, pre-filtered by armature type and stance
 
 local frame_n = 0
 
-local state_check_frame_n = 0
+-- -1 rather than 0: frame_n also starts at 0, so an initial value of 0 made the very first
+-- checkActorStates() call short-circuit and leave state.stance/state.armatureType nil,
+-- which fails every armature/stance gate until the first onUpdate tick.
+local state_check_frame_n = -1
 local state = {
     stance = nil,
     armatureType = nil,
@@ -70,6 +79,24 @@ local function rebuildTrackedAnimsList()
     trackedAnims_n = #trackedAnims
 end
 
+-- Key-triggered anims are filtered here rather than at trigger time, so the text key handler only
+-- ever walks anims that are already valid for the current armature and stance.
+local function rebuildActiveKeyAnims()
+    local newActive = {}
+    for parent, anims in pairs(keyAnims) do
+        local matching = nil
+        for i = 1, #anims do
+            local anim = anims[i]
+            if isProperArmatureType(anim) and isProperStance(anim) then
+                if not matching then matching = {} end
+                matching[#matching + 1] = anim
+            end
+        end
+        newActive[parent] = matching
+    end
+    activeKeyAnims = newActive
+end
+
 
 local function checkActorStates()
     if state_check_frame_n == frame_n then return end
@@ -80,11 +107,79 @@ local function checkActorStates()
     if stance ~= state.stance or armature_type ~= state.armatureType then
         state.stance = stance
         state.armatureType = armature_type
+        -- A first/third person switch rebuilds the model, and clearAnimSources() wipes every
+        -- animation state with no event (animation.cpp:778). Drop the mirror so it cannot go stale.
+        animManager.resetPlayingState()
+
         state.onStateChange:emit(state)
         rebuildTrackedAnimsList()
+        rebuildActiveKeyAnims()
     end
 
     state_check_frame_n = frame_n
+end
+
+-- Equipped items, resolved lazily and at most once per frame per slot. Nothing calls these unless
+-- an override asks, so registrations that do not care about equipment pay nothing at all, and
+-- several that do share a single lookup per frame.
+--
+-- Both the object and its lowercased record id are cached: .recordId is not a plain field but a
+-- property backed by a C++ call that serializes a fresh string each access, and ids are stored as
+-- authored ("BM nordic silver claymore", "King's_Oath") so they need lowering to compare.
+local equipSlotCache = {}
+
+local function refreshEquippedItem(slot)
+    local entry = equipSlotCache[slot]
+    if entry == nil then
+        entry = { frame_n = -1 }
+        equipSlotCache[slot] = entry
+    end
+    if entry.frame_n ~= frame_n then
+        entry.frame_n = frame_n
+        entry.item = types.Actor.getEquipment(omwself, slot)
+        entry.id = entry.item and string.lower(entry.item.recordId) or nil
+    end
+    return entry
+end
+
+-- The item equipped in the given EQUIPMENT_SLOT as a GameObject, or nil.
+local function getEquippedItem(slot)
+    return refreshEquippedItem(slot).item
+end
+
+-- Lowercased record id of the item in the given EQUIPMENT_SLOT, or nil.
+local function getEquippedItemId(slot)
+    return refreshEquippedItem(slot).id
+end
+
+-- Convenience wrappers for the weapon hand, which is what most conditions want.
+local function getEquippedWeapon()
+    return getEquippedItem(types.Actor.EQUIPMENT_SLOT.CarriedRight)
+end
+
+local function getEquippedWeaponId()
+    return getEquippedItemId(types.Actor.EQUIPMENT_SLOT.CarriedRight)
+end
+
+-- True when the equipped weapon's record id contains substr. Plain substring match, no patterns,
+-- so substr must be lowercase.
+local function isEquippedWeapon(substr)
+    local id = getEquippedWeaponId()
+    return id ~= nil and string.find(id, substr, 1, true) ~= nil
+end
+
+-- True while some override is playing over groupname with the parent hidden (blendMask 0).
+-- Reads anim.enabled rather than anim.running on purpose: running is cleared by onUpdate the moment
+-- the parent stops, which is the same moment the follow-through text keys are being delivered,
+-- whereas enabled is only rewritten by the next attack's wind up.
+local function isParentHidden(groupname)
+    local anims = animations[groupname]
+    if not anims then return false end
+    for i = 1, #anims do
+        local anim = anims[i]
+        if anim.hidesParent and anim.enabled then return true end
+    end
+    return false
 end
 
 local function addToAnimMap(anim)
@@ -99,9 +194,215 @@ local function addToAnimMap(anim)
 end
 
 
+--- Key-triggered animation handling ----
+-----------------------------------------
+-- A key-triggered animation is fire-and-forget: it starts when a named text key fires on its parent
+-- group, and is never tracked afterwards. The engine removes it on its own once it ends
+-- (autoDisable), so unlike an override it costs nothing per frame and never enters trackedAnims.
+--
+-- anim.key is matched against the text key with a single leading and/or trailing "*", compiled once
+-- at registration into a mode + literal so matching at runtime is one plain string.find and no
+-- allocation. "*follow stop" matches every attack's follow-through stop key regardless of attack
+-- type and strength.
+
+local KEY_MATCH_EXACT, KEY_MATCH_PREFIX, KEY_MATCH_SUFFIX, KEY_MATCH_CONTAINS, KEY_MATCH_ANY = 1, 2, 3, 4, 5
+
+local function compileKeyMatcher(anim)
+    local pattern = string.lower(anim.key) -- text keys reach us lowercased by the engine
+    local head = string.sub(pattern, 1, 1) == "*"
+    local tail = string.sub(pattern, -1) == "*"
+
+    if head then pattern = string.sub(pattern, 2) end
+    if tail then pattern = string.sub(pattern, 1, -2) end
+
+    if pattern == "" then
+        anim.keyMatchMode = KEY_MATCH_ANY
+    elseif head and tail then
+        anim.keyMatchMode = KEY_MATCH_CONTAINS
+    elseif head then
+        anim.keyMatchMode = KEY_MATCH_SUFFIX
+    elseif tail then
+        anim.keyMatchMode = KEY_MATCH_PREFIX
+    else
+        anim.keyMatchMode = KEY_MATCH_EXACT
+    end
+
+    anim.keyMatchLiteral = pattern
+    anim.keyMatchOffset = -#pattern -- only used by the suffix mode
+end
+
+local function matchesKey(anim, key)
+    local mode = anim.keyMatchMode
+    if mode == KEY_MATCH_EXACT then
+        return key == anim.keyMatchLiteral
+    elseif mode == KEY_MATCH_SUFFIX then
+        return string.find(key, anim.keyMatchLiteral, anim.keyMatchOffset, true) ~= nil
+    elseif mode == KEY_MATCH_PREFIX then
+        return string.find(key, anim.keyMatchLiteral, 1, true) == 1
+    elseif mode == KEY_MATCH_CONTAINS then
+        return string.find(key, anim.keyMatchLiteral, 1, true) ~= nil
+    end
+    return true -- KEY_MATCH_ANY
+end
+
+-- Mirrors the override start flow: condition, then preTrigger (which may flip enabled or swap
+-- groupname), then the actual play.
+local function triggerKeyAnimation(anim, key)
+    -- Fire once per frame. The same logical key can reach us several times in one engine event
+    -- flush, because a state emits every key it crosses -- including those of other groups sharing
+    -- its .kf file. Without this each copy would cancel and restart the animation.
+    if anim.lastTriggerFrame == frame_n then return end
+    anim.lastTriggerFrame = frame_n
+
+    if anim.condition and not anim:condition(key) then return end
+    if anim.preTrigger then anim:preTrigger(key) end
+    if not anim.enabled then return end
+    if not animation.hasGroup(omwself, anim.groupname) then return end
+
+    -- playBlended on a group that is still active only updates its priority and returns, so an
+    -- animation left over from a previous trigger would silently never restart. Clear it first.
+    if animManager.isPlaying(anim.groupname) then
+        animation.cancel(omwself, anim.groupname)
+    end
+
+    I.AnimationController.playBlendedAnimation(anim.groupname, anim:options(key))
+end
+
+--- Tails -------------------------------
+-----------------------------------------
+-- A tail is a cosmetic flourish played the moment an attack's follow-through ends. Tails are not
+-- registered: whenever any group reaches its "<type> [<strength> ]follow stop" key, we look for a
+-- "<type> tail start" / "<type> tail stop" pair in "<group>extra" and play it if both keys exist.
+-- That covers variant groups for free - weapontwohandsub finds weapontwohandsubextra.
+--
+-- Priority is Movement + 1 on the upper body only: the one value strictly above Movement (5) and
+-- below Weapon (7), so a tail can never interrupt an attack or touch the legs. It ties with Hit, and
+-- the engine breaks per-bone-group ties alphabetically by group name, so "<group>extra" losing to
+-- "hit1".."hit5" is what lets a stagger cut a flourish short. LowerBody is left unset, which the
+-- engine defaults to PRIORITY.Default; that also keeps the set from ever comparing equal to Hit's,
+-- which would make the engine destroy one of the two states.
+--
+-- Tail groups never have overrides of their own - animations[] is keyed by parent group and nothing
+-- is registered under an "...extra" name - so a tail's playBlended passes straight through the
+-- override handler. Tail keys are "tail start/stop", which never match "follow stop", so a tail
+-- cannot trigger another tail.
+local TAIL_FOLLOW_STOP = "follow stop"
+local TAIL_FOLLOW_STOP_OFFSET = -#TAIL_FOLLOW_STOP
+local TAIL_PRIORITY = animation.PRIORITY.Movement + 1
+
+-- Reused for every tail. Only startKey, stopKey and speed change between plays.
+local tailOptions = {
+    loops = 0,
+    autoDisable = true,
+    blendMask = animation.BLEND_MASK.UpperBody,
+    blendmask = animation.BLEND_MASK.UpperBody,
+    priority = {
+        [animation.BONE_GROUP.Torso] = TAIL_PRIORITY,
+        [animation.BONE_GROUP.LeftArm] = TAIL_PRIORITY,
+        [animation.BONE_GROUP.RightArm] = TAIL_PRIORITY,
+    },
+}
+
+-- [attack group] = { [attack type] = { group, startKey, stopKey } | false }. Resolving needs two
+-- text key lookups, each a linear scan over every anim source, so it happens once per combination.
+-- Anim sources differ between armatures, hence the flush on state change.
+local tailKeyCache = {}
+local tailLastFrame = {} -- [tail group] = frame_n, so duplicate key deliveries play it only once
+
+state.onStateChange:addEventHandler(function()
+    tailKeyCache = {}
+end)
+
+local function resolveTail(groupname, attackType)
+    local byType = tailKeyCache[groupname]
+    if byType == nil then
+        byType = {}
+        tailKeyCache[groupname] = byType
+    end
+
+    local resolved = byType[attackType]
+    if resolved == nil then
+        local tailGroup = groupname .. "extra"
+        local startKey = attackType .. " tail start"
+        local stopKey = attackType .. " tail stop"
+        local prefix = tailGroup .. ": "
+        resolved = false
+        -- Both keys must exist: playBlended silently plays nothing if either is missing.
+        if animation.getTextKeyTime(omwself, prefix .. startKey) and
+            animation.getTextKeyTime(omwself, prefix .. stopKey) then
+            resolved = { group = tailGroup, startKey = startKey, stopKey = stopKey }
+        end
+        byType[attackType] = resolved
+    end
+
+    return resolved
+end
+
+local function tryPlayTail(groupname, key)
+    -- Frame-gated. Makes sure a pending armature change has flushed tailKeyCache before we trust it.
+    checkActorStates()
+
+    -- A parent hidden behind a variant keeps running and keeps emitting its follow-through keys;
+    -- only the group actually on screen should get a flourish. Variant groups need no such check,
+    -- since they only emit keys while they really play.
+    if isParentHidden(groupname) then return end
+
+    local sep = string.find(key, " ", 1, true) -- the attack type is the first token
+    if not sep then return end
+
+    local tail = resolveTail(groupname, string.sub(key, 1, sep - 1))
+    if not tail then return end
+
+    -- The same key can arrive several times in one frame when groups share a .kf and key times.
+    if tailLastFrame[tail.group] == frame_n then return end
+    tailLastFrame[tail.group] = frame_n
+
+    -- playBlended on a still-active group only updates its priority, so a tail left over from the
+    -- previous swing would never restart. Clear it first.
+    if animManager.isPlaying(tail.group) then
+        animation.cancel(omwself, tail.group)
+    end
+
+    tailOptions.startKey = tail.startKey
+    tailOptions.stopKey = tail.stopKey
+    tailOptions.startkey = tail.startKey -- engine reads camelCase; lowercase is for other mods
+    tailOptions.stopkey = tail.stopKey
+    -- Inherit the attack's speed: its state still exists at this point (autoDisable is off).
+    tailOptions.speed = animation.getSpeed(omwself, groupname) or 1
+
+    I.AnimationController.playBlendedAnimation(tail.group, tailOptions)
+end
+
+local function onAnimationTextKey(groupname, key)
+    -- Tails need no registration, so they are checked ahead of the registry early-out below. One
+    -- plain find at a fixed offset per key; only follow-through stops go any further.
+    if string.find(key, TAIL_FOLLOW_STOP, TAIL_FOLLOW_STOP_OFFSET, true) then
+        tryPlayTail(groupname, key)
+    end
+
+    if keyAnims_n == 0 then return end
+
+    -- Keeps stance/armature (and therefore activeKeyAnims) current. Internally gated to run at most
+    -- once per frame, so this costs a single integer compare on all but the first key of a frame.
+    -- Has to run before the lookup below, since that map is what it rebuilds.
+    checkActorStates()
+
+    local anims = activeKeyAnims[groupname]
+    if not anims then return end
+
+    for i = 1, #anims do
+        local anim = anims[i]
+        if matchesKey(anim, key) then triggerKeyAnimation(anim, key) end
+    end
+end
+
+animManager.addOnKeyHandler(onAnimationTextKey)
+
+
 --- API Functions -----------------------
 --- -------------------------------------
 --- It is expected that an override has either a parent anim group assigned or startOnUpdate: true. Otherwise override will never start.
+--- Optional anim.onUpdate(self, dt) is called every frame while the override is running, after its stop check.
 local function addAnimationOverride(anim)
     -- print("registering animation"  .. anim.groupname)
     if not anim.stance then anim.stance = gutils.STANCE.Weapon end -- Default value for backwards compatibility
@@ -132,51 +433,237 @@ local function removeAnimationOverride(id)
 end
 
 
---[[ 
-params example:
-{
-    parentGroupname = "weapononehand",
-    overrideGroupname = "weapononehand1",
-    armatureType = I.ReAnimation.ARMATURE_TYPE.ThirdPerson,
-} 
-]]
+-- The engine plays the follow-through last, so its start key is the closest thing to "attack
+-- over" that the existing playBlended events give us, without watching text keys.
+local FOLLOW_START = "follow start"
+local FOLLOW_START_OFFSET = -#FOLLOW_START
 
--- This will result in parentAttackGroupname and altAttackGroupname being used one after another.
--- altAttackGroupname textkey timings should match parent textkey timings exactly.
-local function addAltAttackAnimations(params)
-    if not params.parentAttackGroupname or not params.altAttackGroupname then
-        error("addAltAttackAnimation(): parentAttackGroupname or altAttackGroupname were not found in params object.")
+-- Picks one group out of an alternation step's interchangeable candidates.
+-- stepState is the per-step scratch table: { rr, last, repeats }.
+local function pickVariant(step, stepState, subAttackMode, maxRepeats)
+    local n = #step
+    if n == 1 then return step[1] end
+
+    if subAttackMode == gutils.SUB_ATTACK_MODE.RoundRobin then
+        stepState.rr = stepState.rr % n + 1
+        return step[stepState.rr]
+    end
+
+    local idx = math.random(n)
+
+    -- Refuse a run longer than maxRepeats by walking to the next different candidate. If every
+    -- entry names the same group there is nothing to switch to and we simply keep it, so a
+    -- single-candidate (or all-identical) step can never spin here.
+    if maxRepeats > 0 and stepState.repeats >= maxRepeats and step[idx] == stepState.last then
+        for _ = 1, n - 1 do
+            idx = idx % n + 1
+            if step[idx] ~= stepState.last then break end
+        end
+    end
+
+    local pick = step[idx]
+    if pick == stepState.last then
+        stepState.repeats = stepState.repeats + 1
+    else
+        stepState.repeats = 1
+    end
+    stepState.last = pick
+
+    return pick
+end
+
+
+--[[
+Registers per-attack-type variants of a weapon's attack animation.
+
+params:
+{
+    parentAttackGroupname = "weapontwohand",
+    armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
+    stance = I.ReAnimation.STANCE.Weapon,   -- optional, defaults to Weapon
+    subAttackMode = I.ReAnimation.SUB_ATTACK_MODE.Random,  -- optional, defaults to Random
+    randomMaxRepeats = 3,                   -- optional, defaults to 3
+    sequenceResetTime = 3,                  -- optional, seconds, defaults to 3
+    condition = function(self) ... end,     -- optional, truthy for this set to apply at all
+    attacks = {
+        chop   = { { "weapontwohand", "weapontwohandsub" }, { "weapontwohandalt" } },
+        slash  = { { "weapontwohand" }, { "weapontwohandalt" } },
+        thrust = { { "weapontwohand" }, { "weapontwohandalt" } },
+    },
+}
+
+Each attack type maps to two nested lists:
+
+  * The outer list alternates. Attack n of that type uses step (n % #steps), so one step means no
+    alternation at all and two steps give the classic A/B swing.
+  * The inner list holds interchangeable variants, one picked per attack according to
+    `subAttackMode`:
+      - SUB_ATTACK_MODE.Random (default) picks uniformly at random. `randomMaxRepeats` caps how many
+        times in a row the same variant may come up, so with the default of 3 a fourth identical
+        roll is swapped for a different candidate. Set it to 0 to allow unlimited runs. A step with
+        a single candidate is unaffected.
+      - SUB_ATTACK_MODE.RoundRobin cycles through the candidates in declaration order instead.
+    Each alternation step keeps its own picker state, so a step is only ever compared against its
+    own history.
+
+`sequenceResetTime` restarts the alternation at its first step when that attack type has not been
+used for that many seconds, so a fight opens on the base attack rather than halfway through the
+cycle. It is measured from the end of the previous attack of that type - strictly, from the start of
+its follow-through - so it counts idle time rather than idle time plus the swing itself. Simulation
+time, so time spent paused does not count.
+  * A candidate equal to parentAttackGroupname means "don't override" - the engine's own animation
+    plays as normal. That is how a variant set can include the vanilla animation as one option.
+
+An attack type missing from `attacks` is left completely alone.
+
+`condition` gates the whole set, so several sets can share one parent group and be selected by
+weapon, stance or anything else - see getEquippedWeapon()/isEquippedWeapon(). Their conditions must
+be mutually exclusive: if two sets on the same parent are ever active together, both hide the parent
+and uniquify its priority, and the engine's equal-priority rule then erases one of them.
+
+Every variant group's textkey timings must match the parent's exactly, for the same reason as the
+old alternating attacks: the variant plays on top while the hidden parent's keys continue to drive
+the engine's hit timing and attack state machine.
+]]
+local attackVariantsRegistrations = 0
+
+local function addAttackVariants(params)
+    if not params.parentAttackGroupname or not params.attacks then
+        error("addAttackVariants(): parentAttackGroupname or attacks were not found in params object.")
         return
     end
-    
-    local override = {
-        id = "AltAttack",
-        parent = params.parentAttackGroupname,
-        groupname = params.altAttackGroupname,
-        armatureType = params.armatureType,
-        enabled = true,
-        preOverride = function(self, pOptions)
-            local startKey = pOptions.startkey or pOptions.startKey
-            local stopKey = pOptions.stopkey or pOptions.stopKey
-            
-            -- Alternate attacks
-            if gutils.isAttackTypeStart(startKey) then
-                
-                local key = self.parent .. gutils.isAttackType(startKey)
-                if not attackCounters[key] then attackCounters[key] = -1 end
-                attackCounters[key] = (attackCounters[key] + 1) % 2
 
-                if attackCounters[key] == 1 then
-                    self.enabled = true
-                else
-                    self.enabled = false
+    local parent = params.parentAttackGroupname
+    local subAttackMode = params.subAttackMode or gutils.SUB_ATTACK_MODE.Random
+    if subAttackMode ~= gutils.SUB_ATTACK_MODE.Random and subAttackMode ~= gutils.SUB_ATTACK_MODE.RoundRobin then
+        error("addAttackVariants(): unknown sub attack mode '" .. tostring(subAttackMode) .. "'.")
+        return
+    end
+
+    -- Scratch state for the picker, one entry per alternation step of every attack type.
+    local stepStates = {}
+    for attackType, steps in pairs(params.attacks) do
+        local states = {}
+        for i = 1, #steps do states[i] = { rr = 0, last = nil, repeats = 0 } end
+        stepStates[attackType] = states
+    end
+
+    -- Initial groupname. It must never be the parent, since the override handler cancels
+    -- anim.groupname unconditionally and that would kill the engine's own attack animation.
+    -- ATTACK_TYPES rather than pairs() so the choice is deterministic between runs.
+    local firstGroup = nil
+    for _, attackType in ipairs(ATTACK_TYPES) do
+        local steps = params.attacks[attackType]
+        if steps then
+            for _, step in ipairs(steps) do
+                for _, groupname in ipairs(step) do
+                    if groupname ~= parent then
+                        firstGroup = firstGroup or groupname
+                    end
                 end
             end
+        end
+    end
+
+    if not firstGroup then
+        error("addAttackVariants(): attacks contained no groups other than " .. parent .. ".")
+        return
+    end
+
+    local override = {
+        -- Counter in the default id: several sets can share one parent, gated by different
+        -- conditions, and they must stay individually removable.
+        id = params.id or ("AttackVariants_" .. parent .. "_" .. attackVariantsRegistrations),
+        parent = parent,
+        groupname = firstGroup,
+        armatureType = params.armatureType,
+        stance = params.stance,
+        enabled = false,
+        -- Marks that options() hides the parent (blendMask 0). The parent keeps running and keeps
+        -- emitting its text keys while hidden, so anything key-triggered off it needs to know.
+        -- See isParentHidden().
+        hidesParent = true,
+        variants = params.attacks,
+        userCondition = params.condition,
+        counters = {},
+        stepStates = stepStates,
+        lastAttackEndTime = {},
+        subAttackMode = subAttackMode,
+        randomMaxRepeats = params.randomMaxRepeats or 3,
+        sequenceResetTime = params.sequenceResetTime or 3,
+        preOverride = function(self, pOptions)
+            local startKey = pOptions.startkey or pOptions.startKey
+            if startKey == nil then return end
+
+            -- Only re-pick on the wind up. The release and follow through sections must keep
+            -- playing whatever this attack already chose.
+            local attackType = gutils.isAttackTypeStart(startKey)
+            if not attackType then
+                -- Not the wind up, so the pick stays as it is. The follow-through section is the
+                -- last one played, so use it to timestamp the end of this attack for the reset
+                -- timer. Doing it here rather than on the wind up means the timer measures idle
+                -- time instead of idle time plus the attack's own duration.
+                if string.find(startKey, FOLLOW_START, FOLLOW_START_OFFSET, true) then
+                    local endedType = gutils.isAttackType(startKey)
+                    if endedType then self.lastAttackEndTime[endedType] = core.getSimulationTime() end
+                end
+                return
+            end
+
+            local steps = self.variants[attackType]
+            if not steps then
+                self.enabled = false
+                return
+            end
+
+            -- Restart the sequence at its first step when this attack type has been idle a while,
+            -- so a fight always opens on the base attack rather than mid-alternation. Measured from
+            -- the end of the previous attack of this type, in simulation time so a paused menu does
+            -- not count. An attack interrupted before its follow-through leaves the older stamp in
+            -- place, which simply makes a reset more likely.
+            local lastEnd = self.lastAttackEndTime[attackType]
+
+            local n = 0
+            if lastEnd and (core.getSimulationTime() - lastEnd) <= self.sequenceResetTime then
+                n = (self.counters[attackType] or -1) + 1
+            end
+            self.counters[attackType] = n
+
+            local stepIndex = (n % #steps) + 1
+            local pick = pickVariant(steps[stepIndex], self.stepStates[attackType][stepIndex],
+                self.subAttackMode, self.randomMaxRepeats)
+
+            -- Registering a variant is taken as a promise that its animation exists.
+            local isVanilla = pick == self.parent
+
+            self.enabled = not isVanilla
+
+            if not isVanilla and pick ~= self.groupname then
+                -- Only ever one variant is live at a time, and groupname points at it. The handler
+                -- cancels groupname for us, but only after this ran, so it would clear the group we
+                -- are switching *to* and orphan the one we are switching away from. Retire it here.
+                if animManager.isPlaying(self.groupname) then
+                    animation.cancel(omwself, self.groupname)
+                end
+                self.groupname = pick
+            end
         end,
-        condition = function(self)  
+        condition = function(self)
             local startKey = self.parentOptions.startkey or self.parentOptions.startKey
             if startKey == nil then return false end -- A User reported an error there, with startKey being nil. No idea why, but heres a crappy fix anyway.
-            return gutils.isAttackType(startKey)
+            local attackType = gutils.isAttackType(startKey)
+            -- Unconfigured attack types bail out here, so they never reach the per-section cancel.
+            if not attackType or self.variants[attackType] == nil then return false end
+
+            -- Caller supplied gate, e.g. "only while a katana is equipped". enabled is cleared
+            -- rather than just returning, because preOverride will not run to clear it and
+            -- isParentHidden() reads it - a stale true would wrongly suppress the parent's tail.
+            if self.userCondition and not self:userCondition() then
+                self.enabled = false
+                return false
+            end
+
+            return true
         end,
         options = function(self, pOptions)
             local opts = gutils.cloneAnimOptions(pOptions)
@@ -187,13 +674,130 @@ local function addAltAttackAnimations(params)
 
             pOptions.blendMask = 0
             pOptions.blendmask = 0
-            
+
             return opts
         end,
         startOnAnimEvent = true
     }
-    addAnimationOverride(override)    
+    attackVariantsRegistrations = attackVariantsRegistrations + 1
+    addAnimationOverride(override)
 end
+
+
+--[[
+params example:
+{
+    parentGroupname = "weapononehand",
+    overrideGroupname = "weapononehand1",
+    armatureType = I.ReAnimation.ARMATURE_TYPE.ThirdPerson,
+}
+]]
+
+-- This will result in parentAttackGroupname and altAttackGroupname being used one after another.
+-- altAttackGroupname textkey timings should match parent textkey timings exactly.
+-- Kept as a thin wrapper over addAttackVariants: one alternating pair, for every attack type.
+local function addAltAttackAnimations(params)
+    if not params.parentAttackGroupname or not params.altAttackGroupname then
+        error("addAltAttackAnimation(): parentAttackGroupname or altAttackGroupname were not found in params object.")
+        return
+    end
+
+    local attacks = {}
+    for _, attackType in ipairs(ATTACK_TYPES) do
+        attacks[attackType] = { { params.parentAttackGroupname }, { params.altAttackGroupname } }
+    end
+
+    addAttackVariants({
+        id = "AltAttack", -- preserved so removeAnimationOverride("AltAttack") keeps working
+        parentAttackGroupname = params.parentAttackGroupname,
+        armatureType = params.armatureType,
+        stance = params.stance,
+        attacks = attacks
+    })
+end
+
+
+--[[
+Registers a fire-and-forget animation that starts when a text key fires on its parent group.
+
+anim:
+{
+    id           = "myTrigger",          -- optional, for removeKeyTriggeredAnimation
+    parent       = "weapontwohand",      -- group whose text keys to listen to; may be an array
+    key          = "*follow stop",       -- key to match, with optional leading/trailing "*"
+    groupname    = "weapontwohandextra", -- group to play
+    armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
+    stance       = I.ReAnimation.STANCE.Weapon,  -- optional, defaults to Weapon
+    enabled      = true,                         -- optional, defaults to true
+    condition    = function(self, key) ... end,  -- optional, truthy to proceed
+    preTrigger   = function(self, key) ... end,  -- optional, may change self.groupname / self.enabled
+    options      = function(self, key) ... end,  -- required, returns the playBlended options
+}
+
+`key` matching is compiled once at registration:
+
+    "chop hit"      exact
+    "*follow stop"  suffix
+    "chop*"         prefix
+    "*follow*"      contains
+    "*"             everything
+
+Note that text keys arrive without their "groupname: " prefix, and lowercased.
+
+Unlike overrides these are never tracked after starting: the engine disposes of them itself, so
+they cost nothing per frame. Give them `autoDisable = true` in `options` unless you intend to clean
+up manually.
+]]
+local function addKeyTriggeredAnimation(anim)
+    if not anim.parent or not anim.key or not anim.groupname then
+        error("addKeyTriggeredAnimation(): parent, key and groupname are all required.")
+        return
+    end
+
+    if not anim.stance then anim.stance = gutils.STANCE.Weapon end
+    if not anim.armatureType then anim.armatureType = gutils.ARMATURE_TYPE.Any end
+    if anim.enabled == nil then anim.enabled = true end
+
+    local parents = anim.parent
+    if type(parents) ~= "table" then parents = { parents } end
+
+    for _, parent in ipairs(parents) do
+        local entry = anim
+        if #parents > 1 then
+            entry = gutils.shallowTableCopy(anim)
+            entry.parent = parent
+        end
+        compileKeyMatcher(entry)
+
+        local anims = keyAnims[parent]
+        if not anims then
+            anims = {}
+            keyAnims[parent] = anims
+        end
+        anims[#anims + 1] = entry
+        keyAnims_n = keyAnims_n + 1
+    end
+
+    rebuildActiveKeyAnims()
+end
+
+local function removeKeyTriggeredAnimation(id)
+    if not id then return false end
+    local removed = false
+    for _, anims in pairs(keyAnims) do
+        for i = #anims, 1, -1 do
+            if anims[i].id == id then
+                table.remove(anims, i)
+                keyAnims_n = keyAnims_n - 1
+                removed = true
+            end
+        end
+    end
+    if removed then rebuildActiveKeyAnims() end
+    return removed
+end
+
+
 
 
 
@@ -233,15 +837,19 @@ I.AnimationController.addPlayBlendedAnimationHandler(function(groupname, options
                 --print("After preover check - enabled: " .. tostring(anim.enabled), "running: " .. tostring(anim.running))        
 
                 -- This is necessary for alt attacks to work
-                animation.cancel(omwself, anim.groupname)
-                anim.running = false
+                local wasRunning = false
+                if anim.running then
+                    animation.cancel(omwself, anim.groupname)
+                    anim.running = false
+                    wasRunning = true -- Dirty fix for animation not being removed from the tracked list here leading to accumulation for perpetually running anims.
+                end
 
                 -- Play the override!   
                 if anim.enabled and not anim.running then
                     --print("Overriding " .. anim.parent .. " with " .. anim.groupname, "startKey: " .. tostring(startKey) .. ", stopKey: " .. tostring(stopKey))
                     I.AnimationController.playBlendedAnimation(anim.groupname, anim:options(options)) 
                     anim.running = true
-                    addToTrackedAnimsList(anim)
+                    if not wasRunning then addToTrackedAnimsList(anim) end
                 end
             end
         end
@@ -299,6 +907,14 @@ local function onUpdate(dt)
             anim.running = false            
         end
 
+        -- Per-frame hook for overrides that follow something while they play. After the start/stop
+        -- handling, so a start this frame gets its first call right away and a stop gets none.
+        -- Hooks must not start or stop overrides: that goes through the playBlended handler, which
+        -- can append to or rebuild trackedAnims in the middle of this loop.
+        if anim.running and anim.onUpdate then
+            anim:onUpdate(dt)
+        end
+
         -- Cleanup. Non-running animations are removed from the tracked list (purely for optimization)
         if not anim.running then
             removeFromTrackedAnimsList(i)
@@ -309,14 +925,26 @@ end
 return {
     interfaceName = "ReAnimation",
     interface = {
-        version = 2.6,
+        version = 2.9,
         ARMATURE_TYPE = gutils.ARMATURE_TYPE,
         STANCE = gutils.STANCE,
+        SUB_ATTACK_MODE = gutils.SUB_ATTACK_MODE,
         addAnimationOverride = addAnimationOverride,        
         addAltAttackAnimations = addAltAttackAnimations,
+        addAttackVariants = addAttackVariants,
+        getEquippedItem = getEquippedItem,
+        getEquippedItemId = getEquippedItemId,
+        getEquippedWeapon = getEquippedWeapon,
+        getEquippedWeaponId = getEquippedWeaponId,
+        isEquippedWeapon = isEquippedWeapon,
+        addKeyTriggeredAnimation = addKeyTriggeredAnimation,
         removeAnimationOverride = removeAnimationOverride,
+        removeKeyTriggeredAnimation = removeKeyTriggeredAnimation,
         animations = animations,
         gutils = gutils,
+        -- Clears the isPlaying mirror. From the console: luap, then
+        -- I.ReAnimation.resetPlayingState()
+        resetPlayingState = animManager.resetPlayingState,
         state = state,
     },
     engineHandlers = {

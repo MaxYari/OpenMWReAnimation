@@ -1,3 +1,6 @@
 *.rar
 *.blend
 *.blend1
+!Sources/*.blend
+.claude/
+OPENMW_LUA_API_REFERENCE.md

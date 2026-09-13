@@ -1,0 +1,17 @@
+# Blending into xcrossbowSneakMovement only.
+#
+# Per-animation rules are appended AFTER the global ruleset and the bottom-most
+# matching rule wins, so everything here outranks animations/animation-config.yaml
+# - including its 0.4s springOutWeak "to: sneakforward*" rule.
+
+blending_rules:
+  # Idle -> sneak movement, same as xcrossbowMovement.yaml. "idle*" covers both
+  # idlecrossbow and the idlecrossbowsneak override.
+  #
+  # Also catches changing direction: refreshMovementAnims clears the old movement
+  # before playing the new one, so for that instant the idle underneath is the
+  # "previous" state.
+  - from: "idle*"
+    to: "*"
+    easing: "cubicInOut"
+    duration: 0.4

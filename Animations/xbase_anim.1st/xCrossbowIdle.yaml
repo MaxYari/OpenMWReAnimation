@@ -1,0 +1,24 @@
+# Blending into xCrossbowIdle only.
+#
+# Per-animation rules are appended AFTER the global ruleset and the bottom-most
+# matching rule wins, so everything here outranks animations/animation-config.yaml.
+
+blending_rules:
+  # Walk/run/sneak -> idle, the counterpart of the idle->movement rule in
+  # xcrossbowMovement.yaml. Matched by prefix rather than "*crossbow", which
+  # would also catch the "crossbow" shoot group. "sneak*" covers leaving sneak
+  # movement if sneak was released mid-stride.
+  - from: "walk*"
+    to: "*"
+    easing: "quartOut"
+    duration: 0.5
+
+  - from: "run*"
+    to: "*"
+    easing: "quartOut"
+    duration: 0.5
+
+  - from: "sneak*"
+    to: "*"
+    easing: "quartOut"
+    duration: 0.5

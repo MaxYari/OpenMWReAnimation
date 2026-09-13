@@ -1,0 +1,24 @@
+# Blending into xBowJump only.
+#
+# Per-animation rules are appended AFTER the global ruleset and the bottom-most
+# matching rule wins, so both rules here outrank animations/animation-config.yaml.
+
+blending_rules:
+  # Anything -> this jump. Covers idle->jump and movement->jump alike, since the
+  # global config has no jump-entry rule and they were falling through to the
+  # generic one.
+  - from: "*"
+    to: "jump*"
+    easing: "cubicOut"
+    duration: 0.6
+
+  # Transitions WITHIN the jump stay instant. "$" matches when the destination
+  # group equals the source group (AnimBlendRules::findBlendingRule), so this
+  # catches start->loop start->stop without also catching entry INTO the jump.
+  # Without it the 0.6s rule above would apply to those too, and they are
+  # contiguous points in one animation - in xBowJump Start and Loop Start sit
+  # on the same frame.
+  - from: "*"
+    to: "$"
+    easing: "linear"
+    duration: 0
