@@ -14,8 +14,34 @@ import sys
 
 import kfeval as E
 import nifkf
-from build_compat import SRC, OUT, MERGED
+from build_compat import SRC, OUT, ALL_KFS, REFERENCE
 from fba_merge import LOCOMOTION, Group, all_group_keys, text_lines
+from fba_posture import pose_rotation, pose_translation
+
+_reference = nifkf.KF.load(os.path.join(SRC, REFERENCE))
+
+
+class _World:
+    """E.world, with bones a kf does not key taken from the rig reference (the bow set has no Bip01)."""
+
+    @staticmethod
+    def world(kf, bone, t):
+        chain = []
+        b = bone
+        while b:
+            chain.append(b)
+            b = E.PARENT.get(b)
+        rot = (1.0, 0.0, 0.0, 0.0)
+        pos = (0.0, 0.0, 0.0)
+        for b in reversed(chain):
+            lt = pose_translation(kf, _reference, b, t)
+            pos = tuple(p + c for p, c in zip(pos, E.qrot(rot, lt)))
+            rot = E.qmul(rot, pose_rotation(kf, _reference, b, t))
+        return rot, pos
+
+
+E.world = _World.world
+MERGED = ALL_KFS
 
 
 def horizontal(a, b):
@@ -24,6 +50,9 @@ def horizontal(a, b):
 
 def check(name):
     ours = nifkf.KF.load(os.path.join(SRC, name))
+    if not os.path.exists(os.path.join(OUT, name)):
+        print('== %s: not in the compat folder' % name)
+        return
     out = nifkf.KF.load(os.path.join(OUT, name))
     our_lines, out_lines = text_lines(ours), text_lines(out)
     our_groups, out_groups = all_group_keys(our_lines), all_group_keys(out_lines)

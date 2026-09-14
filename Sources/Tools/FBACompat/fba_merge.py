@@ -49,7 +49,7 @@ EPS = 1e-4
 LOCOMOTION = re.compile(r'^(walk|run|sneak)(forward|back|left|right)')
 # Sections within a group: keys starting with these words form separate warps (the engine never
 # plays across them, and e.g. our equip stop and unequip start share a time).
-SECTION_WORDS = ('chop', 'slash', 'thrust', 'shoot', 'equip', 'unequip', 'block')
+SECTION_WORDS = ('chop', 'slash', 'thrust', 'shoot', 'equip', 'unequip', 'block', 'self', 'touch', 'target')
 # We key the large, medium and small follow-through over the same range; the 3rd person plays them
 # one after another. Ours follow the large one.
 FOLLOW_KEPT = 'large'
@@ -59,6 +59,15 @@ ATTACK_IDLES = {'weapononehand': 'idle1h', 'weapontwohand': 'idle2c', 'weapontwo
                 'handtohand': 'idlehh', 'bowandarrow': 'idlebow', 'crossbow': 'idlecrossbow',
                 'throwweapon': 'idle1t'}
 IDLE_TOKENS = ('crossbow', 'bow', '1h', '2c', '2w', 'hh', '1t')
+
+# Everything left as it was, for the caller to report: "<kf>: <group>: <why>".
+WARNINGS = []
+_current_file = ['']
+
+
+def warn(message):
+    WARNINGS.append('%s: %s' % (_current_file[0], message))
+    print('  warning: ' + message)
 
 
 # ---- text keys --------------------------------------------------------------
@@ -367,6 +376,19 @@ class KeyWarp:
         return pts[-1][1]
 
 
+# Both feet higher than this at once, in an attack or equip section, means the 3rd-person pose does
+# not stand on the floor there (jumps, hits and knockdowns are not sections, so never checked).
+FEET_OFF_FLOOR = 8.0
+
+
+def feet_leave_floor(theirs_kf, warp, samples=40):
+    for i in range(samples + 1):
+        t = warp(warp.start + (warp.end - warp.start) * i / samples)
+        if min(E.world(theirs_kf, 'Bip01 L Foot', t)[1][2], E.world(theirs_kf, 'Bip01 R Foot', t)[1][2]) > FEET_OFF_FLOOR:
+            return True
+    return False
+
+
 def key_section(key):
     first = key.split()[0]
     return first if first in SECTION_WORDS else ''
@@ -391,20 +413,24 @@ def key_warps(group, ours_keys, theirs_keys):
             else:
                 kept.append((t1, t3))
         if len(kept) < 2:
-            print('  %s: section %r shares fewer than two keys with the 3rd person, idle legs' % (group, section))
+            # A lone key (e.g. the thrown attacks' "equip stop" at their start) cannot be warped;
+            # its time is covered by the idle legs between spans.
+            warn('%s: section %r shares a single key with the 3rd person, ignored' % (group, section or 'main'))
             continue
         warps.append((section, KeyWarp(kept)))
-    return warps
+    return warps or None
 
 
 class StillSegment:
-    """One non-locomotion group copied as is; legs from the key-warped 3rd person, the attack's
-    follow-through blending into the idle for tails, or the idle for groups with no match."""
+    """One non-locomotion group copied as is; legs from the key-warped 3rd person, or for tails the
+    attack's follow-through blending into the weapon's idle. A group none of that recognises keeps
+    its own legs, with a warning."""
     sway = 0.0
 
-    def __init__(self, name, keys, theirs_kf, their_groups, offset):
+    def __init__(self, name, keys, ours_kf, theirs_kf, their_groups, offset):
         self.name = name
         self.keys = keys
+        self.ours_kf = ours_kf
         self.theirs_kf = theirs_kf
         self.offset = offset
         self.start = min(keys.values())
@@ -416,10 +442,28 @@ class StillSegment:
         self.idle_period = idle['stop'] - idle['start']
         self.spans = []  # (start, end, pose of our time)
         self.notes = []
+        self.own = False
         target = their_group_for(name, their_groups)
         if target is not None:
-            for section, warp in key_warps(name, keys, their_groups[target]):
-                self.spans.append((warp.start, warp.end, lambda t, w=warp: their_lower_pose(theirs_kf, w(t))))
+            warps = key_warps(name, keys, their_groups[target])
+            if warps is None:
+                self._keep_own('shares too few text keys with the 3rd-person %s' % target)
+                return
+            for section, warp in warps:
+                if section and feet_leave_floor(theirs_kf, warp):
+                    # FBA's crossbow reload squats mid-air: its feet float 20-25 units up.
+                    warn('%s: the 3rd-person %s %s lifts both feet off the floor, idle legs there'
+                         % (name, target, section))
+                    self.notes.append('%s %s -> %s (feet off floor)' % (target, section, idle_name))
+                    continue
+                # Attack and equip sections lunge like FBA: their hip travel, from where the section
+                # starts, moves onto the pelvis (see lower_pose).
+                lunge = None
+                if section:
+                    r0 = E.translation(theirs_kf.data('Bip01'), warp(warp.start))
+                    lunge = (r0[0], r0[1])
+                self.spans.append((warp.start, warp.end,
+                                   lambda t, w=warp: their_lower_pose(theirs_kf, w(t)), lunge))
                 self.notes.append('%s%s' % (target, (' ' + section) if section else ''))
         elif name.endswith('extra'):
             base = their_group_for(name[:-len('extra')], their_groups)
@@ -427,20 +471,32 @@ class StillSegment:
                 if not k.endswith('tail start'):
                     continue
                 attack = k[:-len('tail start')].strip()
-                t1 = keys['%s tail stop' % attack]
-                follow = base and their_groups[base].get('%s %s follow stop' % (attack, FOLLOW_KEPT))
-                if follow is None:
-                    self.notes.append('%s tail: no 3rd-person follow-through, idle legs' % attack)
-                    continue
+                t1 = keys.get('%s tail stop' % attack)
+                follow = None
+                if base is not None:
+                    base_keys = their_groups[base]
+                    follow = base_keys.get('%s %s follow stop' % (attack, FOLLOW_KEPT),
+                                           base_keys.get('%s follow stop' % attack))
+                if t1 is None or follow is None:
+                    self._keep_own('tail of %s has no 3rd-person follow-through to start from' % attack)
+                    return
                 follow_end = their_lower_pose(theirs_kf, follow)
 
                 def tail(t, t0=t0, t1=t1, a=follow_end):
                     s = min(1.0, max(0.0, (t - t0) / (t1 - t0))) if t1 > t0 else 1.0
                     return blend_pose(a, self.idle_pose(t), s * s * (3 - 2 * s))
-                self.spans.append((t0, t1, tail))
+                self.spans.append((t0, t1, tail, None))
                 self.notes.append('%s %s follow stop -> %s' % (base, attack, idle_name))
-        if not self.spans:
-            self.notes.append(idle_name + ' legs')
+            if not self.spans:
+                self._keep_own('tail group without tail keys')
+        else:
+            self._keep_own('no 3rd-person group matches its name')
+
+    def _keep_own(self, reason):
+        self.own = True
+        self.spans = []
+        self.notes = ['own legs (%s)' % reason]
+        warn('%s: %s, keeps its own legs' % (self.name, reason))
 
     def idle_pose(self, t):
         return their_lower_pose(self.theirs_kf, self.idle_start + ((t - self.start) % self.idle_period))
@@ -456,10 +512,23 @@ class StillSegment:
 
     def lower_pose(self, tau):
         t = self.start + tau
+        if self.own:
+            return {b: (E.rotation(self.ours_kf.data(b), t), E.translation(self.ours_kf.data(b), t))
+                    for b in LOWER_BONES}
         inside = [s for s in self.spans if s[0] - EPS <= t <= s[1] + EPS]
         # At a shared boundary the earlier span ends there; the later one starts just after.
         pose = inside[0][2](t) if inside else self.idle_pose(t)
-        pose['Bip01'] = (pose['Bip01'][0], (0.0, 0.0, pose['Bip01'][1][2]))
+        lunge = inside[0][3] if inside else None
+        root_rot, (x, y, z) = pose['Bip01']
+        if lunge is not None:
+            # Bip01's horizontal translation would move the player (the engine accumulates it), so
+            # the hip travel goes on the pelvis instead: body and camera lunge, the feet keep their
+            # planted spots, the player stays put.
+            travel = (x - lunge[0], y - lunge[1], 0.0)
+            pelvis_rot, pelvis_trans = pose['Bip01 Pelvis']
+            local = E.qrot(E.qconj(root_rot), travel)
+            pose['Bip01 Pelvis'] = (pelvis_rot, tuple(a + b for a, b in zip(pelvis_trans, local)))
+        pose['Bip01'] = (root_rot, (0.0, 0.0, z))
         return pose
 
     def sample_times(self, extra_source_times=()):
@@ -507,14 +576,45 @@ def spine_worlds(ours_kf, seg, tau, pose):
     return ours, their_pelvis, E.qmul(their_pelvis, pose[COMPENSATED_BONE][0])
 
 
-def build(ours_path, theirs_path, out_path):
+def add_rest_bones(ours_kf, reference):
+    """Gives ours_kf constant tracks, in the reference kf's pose, for lower body bones it lacks (the
+    bow set has no Bip01): the merge needs our pose there, and in game that pose comes from the rig."""
+    times = [tm for tm, _ in ours_kf.text_keys()]
+    first, last = min(times), max(times)
+    for b in LOWER_BONES:
+        if b in ours_kf.bone_data and ours_kf.data(b).trans['keys'] and ours_kf.data(b).quat_keys + (
+                ours_kf.data(b).xyz or []):
+            continue
+        ref = reference.data(b)
+        ref_t = ref.xyz[0]['keys'][0][0] if ref.rot_type == 4 else ref.quat_keys[0][0]
+        rot = E.rotation(ref, ref_t)
+        trans = tuple(E.translation(ref, ref_t))
+        d = ours_kf.data(b) if b in ours_kf.bone_data else ours_kf.add_bone(b)
+        d.rot_type = 1
+        d.xyz = None
+        d.quat_keys = [(first, rot, ()), (last, rot, ())]
+        d.trans = {'itype': 1, 'keys': [(first, trans, ()), (last, trans, ())]}
+        warn('%s not keyed, merged from the rig rest pose' % b)
+
+
+def build(ours_path, theirs_path, out_path, reference=None):
+    """Merges one kf. Returns its segments, or None when no group was recognised (nothing written)."""
+    import os
+    _current_file[0] = os.path.basename(ours_path)
     ours_kf = nifkf.KF.load(ours_path)
     theirs_kf = nifkf.KF.load(theirs_path)
     for b in LOWER_BONES:
         if b not in theirs_kf.bone_data:
             raise ValueError('3rd-person kf has no %s' % b)
-        if b not in ours_kf.bone_data:
-            raise ValueError('1st-person kf has no %s' % b)
+    if not ours_kf.text_keys():
+        warn('no text keys, not merged')
+        return None
+    if reference is not None:
+        add_rest_bones(ours_kf, reference)
+    else:
+        for b in LOWER_BONES:
+            if b not in ours_kf.bone_data:
+                raise ValueError('1st-person kf has no %s' % b)
 
     our_lines = text_lines(ours_kf)
     their_lines = text_lines(theirs_kf)
@@ -531,18 +631,25 @@ def build(ours_path, theirs_path, out_path):
             ours = Group(our_lines, name)
             theirs = Group(their_lines, target)
             if theirs.steps_usable():
+                labelled = list(theirs.steps)
                 theirs.relabel_by_feet(theirs_kf)
+                if not theirs.steps_usable():
+                    # The foot heights are too close to call (runrighthh): trust the markers.
+                    theirs.steps = labelled
             if not (ours.steps_usable() and theirs.steps_usable()):
-                print('  %s: no usable step markers (ours %d, theirs %d), stretching loop to loop'
-                      % (name, len(ours.steps), len(theirs.steps)))
+                warn('%s: no usable step markers (ours %d, theirs %d), stretched loop to loop'
+                     % (name, len(ours.steps), len(theirs.steps)))
                 ours.steps = [(0.0, 'loop')]
                 theirs.steps = [(0.0, 'loop')]
             seg = LocomotionSegment(ours, theirs, theirs_kf, offset)
             seg.mean_sway = mean_sway(ours_kf, seg)
         else:
-            seg = StillSegment(name, keys, theirs_kf, their_groups, offset)
+            seg = StillSegment(name, keys, ours_kf, theirs_kf, their_groups, offset)
         segments.append(seg)
         offset += seg.length + SEGMENT_GAP
+    if all(getattr(seg, 'own', False) for seg in segments):
+        warn('no group recognised, file not merged')
+        return None
 
     new_data = {b: nifkf.KeyframeData() for b in ours_kf.bone_data}
     for d in new_data.values():

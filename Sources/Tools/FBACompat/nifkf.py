@@ -210,9 +210,36 @@ class KF:
                 out.setdefault(g.strip().lower(), []).append((tm, k.strip().lower()))
         return out
 
+    def add_bone(self, name):
+        """Appends an empty track for bone `name` (string extra data, controller, keyframe data) at
+        the end of both chains, which keeps names and controllers paired. Returns its data."""
+        helper = self.blocks[0][1]
+        last_extra = helper['extra']
+        while self.blocks[last_extra][1]['next'] >= 0:
+            last_extra = self.blocks[last_extra][1]['next']
+        last_ctrl = helper['ctrl']
+        while self.blocks[last_ctrl][1]['next'] >= 0:
+            last_ctrl = self.blocks[last_ctrl][1]['next']
+        # Follow the file's own "bytes remaining" convention: some exporters write 0, others the
+        # string length plus a fixed amount.
+        extra = next(p for t, p in self.blocks if t == 'NiStringExtraData')
+        if extra['bytes'] == 0:
+            size = 0
+        else:
+            size = len(name.encode('latin1')) + extra['bytes'] - len(extra['value'].encode('latin1'))
+        n = len(self.blocks)
+        data = KeyframeData()
+        self.blocks.append(('NiStringExtraData', {'next': -1, 'bytes': size, 'value': name}))
+        self.blocks.append(('NiKeyframeController', dict(self.blocks[last_ctrl][1], next=-1, data=n + 2)))
+        self.blocks.append(('NiKeyframeData', data))
+        self.blocks[last_extra][1]['next'] = n
+        self.blocks[last_ctrl][1]['next'] = n + 1
+        self.bone_data[name] = n + 2
+        return data
+
     def save(self, path):
         w = Writer()
-        w.parts.append(self.header)
+        w.parts.append(self.header[:-4] + struct.pack('<I', len(self.blocks)))
         for t, p in self.blocks:
             w.string(t)
             if t == 'NiSequenceStreamHelper':
