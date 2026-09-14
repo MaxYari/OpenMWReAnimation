@@ -19,6 +19,14 @@ I also have a cool donation banner now:
 
 Thank you for being around, and have fun :) 
 
+## Appreciation
+
+Thanks to [fallchildren](https://github.com/fallchildren2) for code contributions and motivating me to expose a (somewhat) proper API. Check his [3rd Person Alt Attacks](https://modding-openmw.com/mods/3rd-person-alt-attacks/) mod.
+
+Thanks to [taitechnic](https://forums.nexusmods.com/profile/193965921-taitechnic/) and [S3ctor](https://github.com/magicaldave) for the code contribution and optimisation help.
+
+My thanks go to OpenMW discord community for massively helping me overcome a multitude of Lua hurdles, testing and providing feedback.
+
 ## A lot of gifs
 
 That show _some_ of the animations. (Give them some time to load)
@@ -164,14 +172,11 @@ I.ReAnimation.removeAnimationOverride("my_override_id")
 ```
 Where `my_override_id` is an id you provided to the override in `addAnimationOverride` (if you provided such an id at all).
 
+## AI Disclaimer
 
-## Appreciation
+During v3 development Claude Code was used heavily for essentially automating and simplfying evering around animation production which is not animation production itself: e.g developing scripts, finding info in the OpenMW source code and archives, improving the animation toolset, improving and optimising the API. Despite all the obvious ethical and enviromental concerns that come with AI use, truth be told, without the ability to offload absolute tons of tedium to an AI - I dont think this update would ever been possible.
 
-Thanks to [fallchildren](https://github.com/fallchildren2) for code contributions and motivating me to expose a (somewhat) proper API. 
 
-Thanks to [taitechnic](https://forums.nexusmods.com/profile/193965921-taitechnic/) and [S3ctor](https://github.com/magicaldave) for the help in optimisation.
-
-My thanks go to OpenMW discord community for massively helping me overcome a multitude of Lua hurdles, testing and providing feedback.
 
 
 
