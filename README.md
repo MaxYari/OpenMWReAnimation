@@ -21,7 +21,7 @@ Thank you for being around, and have fun :)
 
 ## Appreciation
 
-Thanks to [fallchildren](https://github.com/fallchildren2) for code contributions and motivating me to expose a (somewhat) proper API. Check his [3rd Person Alt Attacks](https://modding-openmw.com/mods/3rd-person-alt-attacks/) mod.
+Thanks to [fallchildren](https://github.com/fallchildren2) for code contributions and motivating me to expose a (somewhat) proper API.
 
 Thanks to [taitechnic](https://forums.nexusmods.com/profile/193965921-taitechnic/) and [S3ctor](https://github.com/magicaldave) for the code contribution and optimisation help.
 
@@ -60,6 +60,15 @@ on how to install mods using the launcher or completely manually (it's also very
 *NOTE #2*: OpenMW camera 1st person head-bob (the one that can be enabled in scripts in-game) may slightly conflict with the walk cycle animation, it's not too bad, but the mod was developed assuming that setting is turned off.
 
 *NOTE #3*: If you _only_ want to use ReAnimation as an API  for another mod (i.e only as a dependency that doesnt add any animations on its own) - only enable `ReAnimation_API` AND delete "Animations" folder from within this mod.
+
+## Mod suggestions
+
+[Dynamic Camera](https://www.nexusmods.com/morrowind/mods/55327) for more dynamic first person camera and visual effects. "Trust me bro" its not some annoying head bob - its subtle, tasteful and makes the experience feel more polished.
+
+[Dynamic Reticle](https://www.nexusmods.com/morrowind/mods/56584) mostly for hit markers to make hits (especially marksman ones) more impactfull.
+
+If you would like NPCs to also have alternating attack animations - try [3rd Person Alt Attacks](https://modding-openmw.com/mods/3rd-person-alt-attacks/) by [fallchildren](https://github.com/fallchildren2) (These animations are made in a different style and dont exactly match mine, but you might enjoy them)
+
 
 ## Mod compatibility
 
