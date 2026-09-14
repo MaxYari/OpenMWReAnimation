@@ -119,27 +119,45 @@ local function checkActorStates()
     state_check_frame_n = frame_n
 end
 
--- Equipped items, resolved lazily and at most once per frame per slot. Nothing calls these unless
--- an override asks, so registrations that do not care about equipment pay nothing at all, and
--- several that do share a single lookup per frame.
+-- Equipped items, resolved lazily and cached per slot. Nothing calls these unless an override asks,
+-- so registrations that do not care about equipment pay nothing at all, and every caller shares the
+-- one cached lookup.
 --
 -- Both the object and its lowercased record id are cached: .recordId is not a plain field but a
 -- property backed by a C++ call that serializes a fresh string each access, and ids are stored as
 -- authored ("BM nordic silver claymore", "King's_Oath") so they need lowering to compare.
+--
+-- A slot is fetched at most once per equipCacheTime seconds of real time (setEquipmentCacheTime,
+-- default 0.1), so polling conditions - shield, torch and star overrides check every frame - cost a
+-- getEquipment ten times a second rather than every frame. The price is that a swap is noticed up
+-- to that long after it happens. Real time rather than simulation time: equipping happens in a
+-- paused inventory, and the first frame after it must see the new item. Within one frame the clock
+-- is read once per slot, and later calls that frame are a single integer compare.
+local EQUIPMENT_CACHE_TIME = 0.1
+local equipCacheTime = EQUIPMENT_CACHE_TIME
 local equipSlotCache = {}
 
 local function refreshEquippedItem(slot)
     local entry = equipSlotCache[slot]
     if entry == nil then
-        entry = { frame_n = -1 }
+        entry = { frame_n = -1, time = -math.huge }
         equipSlotCache[slot] = entry
     end
     if entry.frame_n ~= frame_n then
         entry.frame_n = frame_n
-        entry.item = types.Actor.getEquipment(omwself, slot)
-        entry.id = entry.item and string.lower(entry.item.recordId) or nil
+        local now = core.getRealTime()
+        if now - entry.time >= equipCacheTime then
+            entry.time = now
+            entry.item = types.Actor.getEquipment(omwself, slot)
+            entry.id = entry.item and string.lower(entry.item.recordId) or nil
+        end
     end
     return entry
+end
+
+-- Seconds an equipment lookup stays valid. 0 fetches once per frame.
+local function setEquipmentCacheTime(seconds)
+    equipCacheTime = seconds or EQUIPMENT_CACHE_TIME
 end
 
 -- The item equipped in the given EQUIPMENT_SLOT as a GameObject, or nil.
@@ -303,45 +321,27 @@ local tailOptions = {
     },
 }
 
--- [attack group] = { [attack type] = { group, startKey, stopKey } | false }. Resolving needs two
--- text key lookups, each a linear scan over every anim source, so it happens once per combination.
--- Anim sources differ between armatures, hence the flush on state change.
-local tailKeyCache = {}
 local tailLastFrame = {} -- [tail group] = frame_n, so duplicate key deliveries play it only once
 
-state.onStateChange:addEventHandler(function()
-    tailKeyCache = {}
-end)
-
+-- Returns tail group, start key and stop key, or nil. Looked up afresh on every follow-through stop:
+-- that is once per attack, and two text key lookups per attack cost nothing worth saving. It used
+-- to be cached per group and flushed on armature change, which only holds if the flush always lands
+-- between the two models. An answer taken from the 3rd person model after the state had already
+-- flipped to 1st person - another mod playing attack groups on the player, right at a view switch -
+-- stuck as "no tail" and silenced that group's 1st person tails until the next state change.
 local function resolveTail(groupname, attackType)
-    local byType = tailKeyCache[groupname]
-    if byType == nil then
-        byType = {}
-        tailKeyCache[groupname] = byType
+    local tailGroup = groupname .. "extra"
+    local startKey = attackType .. " tail start"
+    local stopKey = attackType .. " tail stop"
+    local prefix = tailGroup .. ": "
+    -- Both keys must exist: playBlended silently plays nothing if either is missing.
+    if animation.getTextKeyTime(omwself, prefix .. startKey) and
+        animation.getTextKeyTime(omwself, prefix .. stopKey) then
+        return tailGroup, startKey, stopKey
     end
-
-    local resolved = byType[attackType]
-    if resolved == nil then
-        local tailGroup = groupname .. "extra"
-        local startKey = attackType .. " tail start"
-        local stopKey = attackType .. " tail stop"
-        local prefix = tailGroup .. ": "
-        resolved = false
-        -- Both keys must exist: playBlended silently plays nothing if either is missing.
-        if animation.getTextKeyTime(omwself, prefix .. startKey) and
-            animation.getTextKeyTime(omwself, prefix .. stopKey) then
-            resolved = { group = tailGroup, startKey = startKey, stopKey = stopKey }
-        end
-        byType[attackType] = resolved
-    end
-
-    return resolved
 end
 
 local function tryPlayTail(groupname, key)
-    -- Frame-gated. Makes sure a pending armature change has flushed tailKeyCache before we trust it.
-    checkActorStates()
-
     -- A parent hidden behind a variant keeps running and keeps emitting its follow-through keys;
     -- only the group actually on screen should get a flourish. Variant groups need no such check,
     -- since they only emit keys while they really play.
@@ -350,27 +350,27 @@ local function tryPlayTail(groupname, key)
     local sep = string.find(key, " ", 1, true) -- the attack type is the first token
     if not sep then return end
 
-    local tail = resolveTail(groupname, string.sub(key, 1, sep - 1))
-    if not tail then return end
+    local tailGroup, startKey, stopKey = resolveTail(groupname, string.sub(key, 1, sep - 1))
+    if not tailGroup then return end
 
     -- The same key can arrive several times in one frame when groups share a .kf and key times.
-    if tailLastFrame[tail.group] == frame_n then return end
-    tailLastFrame[tail.group] = frame_n
+    if tailLastFrame[tailGroup] == frame_n then return end
+    tailLastFrame[tailGroup] = frame_n
 
     -- playBlended on a still-active group only updates its priority, so a tail left over from the
     -- previous swing would never restart. Clear it first.
-    if animManager.isPlaying(tail.group) then
-        animation.cancel(omwself, tail.group)
+    if animManager.isPlaying(tailGroup) then
+        animation.cancel(omwself, tailGroup)
     end
 
-    tailOptions.startKey = tail.startKey
-    tailOptions.stopKey = tail.stopKey
-    tailOptions.startkey = tail.startKey -- engine reads camelCase; lowercase is for other mods
-    tailOptions.stopkey = tail.stopKey
+    tailOptions.startKey = startKey
+    tailOptions.stopKey = stopKey
+    tailOptions.startkey = startKey -- engine reads camelCase; lowercase is for other mods
+    tailOptions.stopkey = stopKey
     -- Inherit the attack's speed: its state still exists at this point (autoDisable is off).
     tailOptions.speed = animation.getSpeed(omwself, groupname) or 1
 
-    I.AnimationController.playBlendedAnimation(tail.group, tailOptions)
+    I.AnimationController.playBlendedAnimation(tailGroup, tailOptions)
 end
 
 local function onAnimationTextKey(groupname, key)
@@ -937,6 +937,7 @@ return {
         getEquippedWeapon = getEquippedWeapon,
         getEquippedWeaponId = getEquippedWeaponId,
         isEquippedWeapon = isEquippedWeapon,
+        setEquipmentCacheTime = setEquipmentCacheTime,
         addKeyTriggeredAnimation = addKeyTriggeredAnimation,
         removeAnimationOverride = removeAnimationOverride,
         removeKeyTriggeredAnimation = removeKeyTriggeredAnimation,

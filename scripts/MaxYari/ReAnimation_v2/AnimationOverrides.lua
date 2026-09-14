@@ -171,7 +171,24 @@ local function bounceOptions(self)
 end
 
 
-local KATANA_ID_TERMS = { "katana", "scythe", "gravedigger", "bloodrust" }
+-- Options for the thrown shield corrections, from either start path. They never touch the parent:
+-- they outrank it, by one on the arms. The star and sneak idles and the star movement groups also
+-- sit one above the same parents, so that ties on the left arm - and the engine hands a tie to the
+-- state first by name, which "idle1tshield" and "runforward1tshield" are ahead of "idle1tsneak",
+-- "idle1tstar*" and "*1tstar". The lower body goes three up rather than their one or two, so the
+-- whole set never equals theirs and neither state gets evicted. Movement + 1 stays under Weapon, so
+-- a throw still takes the left arm.
+local function thrownShieldOptions(self, pOptions)
+    local opts = cloneAnimOptions(pOptions or self.parentOptions)
+    opts.blendMask = animation.BLEND_MASK.LeftArm
+    opts.blendmask = animation.BLEND_MASK.LeftArm
+    opts.priority = outrankPriority(opts.priority)
+    opts.priority[animation.BONE_GROUP.LowerBody] = opts.priority[animation.BONE_GROUP.LowerBody] + 1
+    return opts
+end
+
+
+local KATANA_ID_TERMS ={ "katana", "scythe", "gravedigger", "bloodrust" }
 
 -- Throwing stars, as opposed to the knives, darts, javelins and axes that share the throwweapon
 -- group. A single term is enough here: every star in Morrowind + Tribunal + Bloodmoon (15 of 15)
@@ -207,8 +224,8 @@ local isThrowingStar = weaponIdMatcher(STAR_ID_TERMS)
 
 -- Same idea for the off hand. This one is polled hard: idleshield's stopCondition runs every frame
 -- while it is playing, which with a shield equipped is most of the time. Uncached it cost a
--- getEquipment, a recordId string serialization and an Armor record lookup per frame; now it is one
--- getEquipment shared across the frame plus a table lookup.
+-- getEquipment, a recordId string serialization and an Armor record lookup per frame; now it is the
+-- API's time-cached id plus a table lookup.
 local isShieldByItemId = {}
 
 local function hasShieldEquipped()
@@ -223,6 +240,23 @@ local function hasShieldEquipped()
     end
 
     return cached
+end
+
+-- Weapon type of the right hand, by id like the rest. nil with nothing in it.
+local weaponTypeByItemId = {}
+
+local function equippedWeaponType()
+    local id = I.ReAnimation.getEquippedWeaponId()
+    if id == nil then return nil end
+
+    local weaponType = weaponTypeByItemId[id]
+    if weaponType == nil then
+        local record = types.Weapon.record(id)
+        weaponType = record and record.type or false
+        weaponTypeByItemId[id] = weaponType
+    end
+
+    return weaponType
 end
 
 
@@ -333,30 +367,45 @@ local animations = {
         end,
         startOnUpdate = true
     },
+    -- Dagger shield corrections. idle1sshield and runforward1sshield are the 1h shield arms
+    -- (idleshield in x1hIdle, runforwardshield in xShieldRun) with the clavicle re-aimed by the 21
+    -- degrees the dagger set turns the upper body past the 1h one, so the shield sits where it does
+    -- with a 1h weapon rather than that far toward the middle - same as the thrown ones below.
+    --
+    -- startOnUpdate as well as on the event: a shield put on while the idle is already playing
+    -- replays nothing, so the idle never passed through the handler with a shield in hand and the
+    -- correction never started. Same for a weapon swap between two daggers.
     {
         parent = {"idle1s","idle1ssneak","jump1s"},
-        groupname = "idleshield",
+        groupname = "idle1sshield",
         armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
         condition = hasShieldEquipped,
         stopCondition = function(self)
             return not self:condition()
         end,
         options = function(self, pOptions)
-            local opts = cloneAnimOptions(pOptions)
+            local opts = cloneAnimOptions(pOptions or self.parentOptions)
             opts.blendMask = animation.BLEND_MASK.LeftArm
             opts.blendmask = animation.BLEND_MASK.LeftArm
 
-            -- Consider: will changing parent options here somehow undesirably propagate to saved self.parentOptions?
-            gutils.expandPriority(pOptions)
-            pOptions.priority[animation.BONE_GROUP.LeftArm] = -1
+            if pOptions then
+                -- Consider: will changing parent options here somehow undesirably propagate to saved self.parentOptions?
+                gutils.expandPriority(pOptions)
+                pOptions.priority[animation.BONE_GROUP.LeftArm] = -1
+            else
+                -- Started on update, the idle is already playing and its left arm can no longer be
+                -- lowered, so outrank it instead. A copy of its priority would evict it.
+                opts.priority = outrankPriority(opts.priority)
+            end
 
             return opts
         end,
-        startOnAnimEvent = true
+        startOnAnimEvent = true,
+        startOnUpdate = true
     },
     {
         parent = { "runforward1s", "runback1s", "runleft1s", "runright1s", "walkforward1s", "walkback1s", "walkleft1s", "walkright1s", "sneakforward1s", "sneakback1s", "sneakleft1s", "sneakright1s" },
-        groupname = "runforwardshield",
+        groupname = "runforward1sshield",
         armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
         condition = hasShieldEquipped,
         stopCondition = function(self)
@@ -381,6 +430,50 @@ local animations = {
                 gutils.expandPriority(pOptions)
                 pOptions.priority[animation.BONE_GROUP.LeftArm] = -1
             end
+
+            return opts
+        end,
+        onUpdate = syncShieldSpeed,
+        startOnAnimEvent = true,
+        startOnUpdate = true
+    },
+    -- Shield corrections for thrown weapons. The thrown set turns the upper body 46 degrees further
+    -- round than the 1h set, and has no shield pose of its own, so a shield stayed wherever the
+    -- throwing arm pose put it - 20 units off. idle1tshield and runforward1tshield are the 1h shield
+    -- arms (idleshield, runforwardshield) with the clavicle re-aimed by those 46 degrees.
+    -- idle1t keeps playing under the star and sneak idles, and so do the thrown movement groups
+    -- under the star ones, so the engine groups are parent enough. See thrownShieldOptions for how
+    -- they win over those overrides.
+    {
+        parent = { "idle1t", "jump1t" },
+        groupname = "idle1tshield",
+        armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
+        condition = hasShieldEquipped,
+        stopCondition = function(self)
+            return not self:condition()
+        end,
+        options = thrownShieldOptions,
+        startOnAnimEvent = true,
+        startOnUpdate = true
+    },
+    {
+        parent = { "runforward1t", "runback1t", "runleft1t", "runright1t", "walkforward1t", "walkback1t", "walkleft1t", "walkright1t", "sneakforward1t", "sneakback1t", "sneakleft1t", "sneakright1t" },
+        groupname = "runforward1tshield",
+        armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
+        condition = hasShieldEquipped,
+        stopCondition = function(self)
+            return not self:condition()
+        end,
+        options = function(self, pOptions)
+            local opts = thrownShieldOptions(self, pOptions)
+
+            -- Same walk-cycle pacing as runforwardshield.
+            local parentSpeed = opts.speed or 1
+            if not pOptions then
+                parentSpeed = animation.getSpeed(omwself, self.parent) or parentSpeed
+            end
+            opts.speed = parentSpeed * walkCyclePace(self.parent)
+            self.syncedSpeed = nil
 
             return opts
         end,
@@ -487,6 +580,55 @@ local animations = {
 for _, anim in ipairs(animations) do
     addOverride(anim)
 end
+
+-- Torch corrections. The engine holds a torch up with its own "torch" group on the left arm, at
+-- Priority Torch over whatever the weapon set does - fixed bone rotations under the neck. Weapon
+-- sets that turn the upper body further round than the 1h set carry the torch toward the middle of
+-- the screen with it: 21 degrees for daggers, 46 for thrown weapons. torch1s and torch1t are the same
+-- arm with the clavicle re-aimed by that difference, so the torch lands where it does over the 1h set.
+--
+-- Deliberately not an override of "torch": the engine re-plays torch every frame while one is held
+-- (updateWeaponState), and each play runs the override handler, which would clone options and
+-- restart the correction every frame. So it polls and outranks the torch instead. The torch group
+-- itself is the cheapest torch check there is - the engine only plays it with a light in the left
+-- hand, and while none is held the lookup is a Lua table read, no equipment fetch.
+local function addTorchCorrection(id, groupname, weaponType)
+    local function condition()
+        return animManager.isPlaying("torch")
+            and equippedWeaponType() == weaponType
+            -- Tracking already waits for the Weapon stance before starting this, but a running
+            -- override is never stopped by a stance change: sheathing leaves the dagger in the
+            -- hand and the torch up.
+            and types.Actor.getStance(omwself) == types.Actor.STANCE.Weapon
+    end
+
+    addOverride({
+        id = id,
+        parent = nil,
+        groupname = groupname,
+        armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
+        condition = condition,
+        stopCondition = function() return not condition() end,
+        options = function()
+            return {
+                startKey = "start",
+                stopKey = "stop",
+                startkey = "start",
+                stopkey = "stop",
+                loops = 999,
+                forceLoop = true,
+                autoDisable = false,
+                priority = outrankPriority(animation.PRIORITY.Torch),
+                blendMask = animation.BLEND_MASK.LeftArm,
+                blendmask = animation.BLEND_MASK.LeftArm
+            }
+        end,
+        startOnUpdate = true
+    })
+end
+
+addTorchCorrection("TorchDagger", "torch1s", types.Weapon.TYPE.ShortBladeOneHand)
+addTorchCorrection("TorchThrown", "torch1t", types.Weapon.TYPE.MarksmanThrown)
 
 I.ReAnimation.addAltAttackAnimations({
     parentAttackGroupname = "weapononehand",

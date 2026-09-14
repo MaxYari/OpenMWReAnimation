@@ -18,7 +18,8 @@ different legs. Text keys move with their group; relative timings are kept exact
   piecewise-linearly through the text keys both share, section by section (chop, slash, equip...).
   Attack tails blend from the 3rd-person follow-through's end into the idle; groups with no match
   get the weapon's 3rd-person idle legs. No root motion: 3rd-person attack hips travel far enough
-  to push the player around.
+  to push the player around, so attack and equip sections carry that travel on the pelvis instead
+  (HIP_MOTION of it, with the feet placed by IK below 1.0).
 * Bip01 Spine, the top bone of the lower body layer, is counter-rotated so it keeps exactly its
   1st-person orientation in the character frame. The camera takes only the head's position, never
   its rotation, so whatever plays on the upper body over this is framed as without FBA. During
@@ -41,6 +42,14 @@ COMPENSATED_BONE = 'Bip01 Spine'
 # swing: the 3rd-person spine's average lean over the loop is always removed, or thrusts would sit
 # off-center.
 SWAY = 0.33
+# Share of the 3rd-person hip travel (lunges) kept in attack and equip sections. It goes on the pelvis,
+# so body and camera move while the player's position does not. Below 1.0 each foot's horizontal path
+# is scaled by the same share (planted feet stay where they are, steps get shorter) and the legs are
+# bent to reach it (reach()).
+HIP_MOTION = 1.0
+# Use the weapon's idle legs in attack/equip sections where the 3rd-person pose lifts both feet off
+# the floor (FBA's crossbow reload, once the torso is held upright).
+IDLE_WHEN_FEET_LIFT = True
 IDENTITY = (1.0, 0.0, 0.0, 0.0)
 FPS = 30.0
 SEGMENT_GAP = 0.2
@@ -97,13 +106,18 @@ def group_keys(lines, group):
     return keys
 
 
+# Text keys that are not animation groups: "SoundGen: Left", "Sound: crossbowshoot". They travel with
+# whatever group they sit in.
+NOT_GROUPS = ('soundgen', 'sound')
+
+
 def all_group_keys(lines):
-    """{group: {key: time}} for every group, soundgen excluded."""
+    """{group: {key: time}} for every animation group."""
     out = {}
     for tm, line in lines:
         if ':' in line:
             g, k = split_line(line)
-            if g != 'soundgen':
+            if g not in NOT_GROUPS:
                 out.setdefault(g, {})[k] = tm
     return out
 
@@ -139,6 +153,77 @@ def their_lower_pose(kf, t):
 def blend_pose(a, b, w):
     return {bone: (E.qslerp(a[bone][0], b[bone][0], w),
                    tuple(x + (y - x) * w for x, y in zip(a[bone][1], b[bone][1]))) for bone in a}
+
+
+# ---- leg IK -----------------------------------------------------------------------------
+
+LEGS = (('Bip01 L Thigh', 'Bip01 L Calf', 'Bip01 L Foot'), ('Bip01 R Thigh', 'Bip01 R Calf', 'Bip01 R Foot'))
+# Knee hinge for a leg too straight to tell its bend plane: the shin swings back (-y, the character
+# faces +y).
+KNEE_AXIS = (-1.0, 0.0, 0.0)
+
+
+def vsub(a, b):
+    return tuple(x - y for x, y in zip(a, b))
+
+
+def vadd(a, b):
+    return tuple(x + y for x, y in zip(a, b))
+
+
+def vdot(a, b):
+    return sum(x * y for x, y in zip(a, b))
+
+
+def vcross(a, b):
+    return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+
+
+def vlen(a):
+    return math.sqrt(vdot(a, a))
+
+
+def vunit(a):
+    n = vlen(a)
+    return tuple(x / n for x in a)
+
+
+def reach(pose, kf, leg, target):
+    """Two-bone IK on pose, in place: bends the knee in its current plane to the length the target
+    needs, then swings the thigh the shortest way onto it. The foot keeps its world rotation. Returns
+    how far the foot ends from the target (over-stretch)."""
+    thigh, calf, foot = leg
+    pelvis_rot = E.world(kf, 'Bip01 Pelvis', 0.0, pose)[0]
+    thigh_rot, thigh_pos = E.world(kf, thigh, 0.0, pose)
+    calf_rot, knee_pos = E.world(kf, calf, 0.0, pose)
+    foot_rot, foot_pos = E.world(kf, foot, 0.0, pose)
+    upper, lower = vsub(knee_pos, thigh_pos), vsub(foot_pos, knee_pos)
+    a, b = vlen(upper), vlen(lower)
+    hinge = vcross(upper, lower)
+    hinge = vunit(hinge) if vlen(hinge) > 1e-6 * a * b else KNEE_AXIS
+    d = min(max(vlen(vsub(target, thigh_pos)), abs(a - b) + 1e-3), a + b - 1e-3)
+    bend = math.acos(min(1.0, max(-1.0, vdot(upper, lower) / (a * b))))
+    wanted = math.acos(min(1.0, max(-1.0, (d * d - a * a - b * b) / (2 * a * b))))
+    knee = E.axis_quat(wanted - bend, hinge)
+    calf_rot = E.qmul(knee, calf_rot)
+    foot_pos = vadd(knee_pos, E.qrot(knee, lower))
+    swing = rotation_between(vsub(foot_pos, thigh_pos), vsub(target, thigh_pos))
+    thigh_new = E.qmul(swing, thigh_rot)
+    calf_new = E.qmul(swing, calf_rot)
+    pose[thigh] = (E.qmul(E.qconj(pelvis_rot), thigh_new), pose[thigh][1])
+    pose[calf] = (E.qmul(E.qconj(thigh_new), calf_new), pose[calf][1])
+    pose[foot] = (E.qmul(E.qconj(calf_new), foot_rot), pose[foot][1])
+    return vlen(vsub(vadd(thigh_pos, E.qrot(swing, vsub(foot_pos, thigh_pos))), target))
+
+
+def rotation_between(u, v):
+    """Shortest rotation turning direction u onto direction v."""
+    u, v = vunit(u), vunit(v)
+    axis = vcross(u, v)
+    s = vlen(axis)
+    if s < 1e-9:
+        return IDENTITY
+    return E.axis_quat(math.atan2(s, vdot(u, v)), tuple(c / s for c in axis))
 
 
 def pelvis_world_rotation(kf, t):
@@ -440,9 +525,10 @@ class StillSegment:
         idle = their_groups[idle_name]
         self.idle_start = idle['start']
         self.idle_period = idle['stop'] - idle['start']
-        self.spans = []  # (start, end, pose of our time)
+        self.spans = []  # (start, end, pose of our time, lunge or None)
         self.notes = []
         self.own = False
+        self.ik_miss = [0.0]
         target = their_group_for(name, their_groups)
         if target is not None:
             warps = key_warps(name, keys, their_groups[target])
@@ -450,7 +536,7 @@ class StillSegment:
                 self._keep_own('shares too few text keys with the 3rd-person %s' % target)
                 return
             for section, warp in warps:
-                if section and feet_leave_floor(theirs_kf, warp):
+                if section and IDLE_WHEN_FEET_LIFT and feet_leave_floor(theirs_kf, warp):
                     # FBA's crossbow reload squats mid-air: its feet float 20-25 units up.
                     warn('%s: the 3rd-person %s %s lifts both feet off the floor, idle legs there'
                          % (name, target, section))
@@ -460,8 +546,10 @@ class StillSegment:
                 # starts, moves onto the pelvis (see lower_pose).
                 lunge = None
                 if section:
-                    r0 = E.translation(theirs_kf.data('Bip01'), warp(warp.start))
-                    lunge = (r0[0], r0[1])
+                    t0 = warp(warp.start)
+                    r0 = E.translation(theirs_kf.data('Bip01'), t0)
+                    lunge = {'root': (r0[0], r0[1]), 'warp': warp,
+                             'feet': {leg[2]: E.world(theirs_kf, leg[2], t0)[1] for leg in LEGS}}
                 self.spans.append((warp.start, warp.end,
                                    lambda t, w=warp: their_lower_pose(theirs_kf, w(t)), lunge))
                 self.notes.append('%s%s' % (target, (' ' + section) if section else ''))
@@ -520,15 +608,26 @@ class StillSegment:
         pose = inside[0][2](t) if inside else self.idle_pose(t)
         lunge = inside[0][3] if inside else None
         root_rot, (x, y, z) = pose['Bip01']
-        if lunge is not None:
-            # Bip01's horizontal translation would move the player (the engine accumulates it), so
-            # the hip travel goes on the pelvis instead: body and camera lunge, the feet keep their
-            # planted spots, the player stays put.
-            travel = (x - lunge[0], y - lunge[1], 0.0)
-            pelvis_rot, pelvis_trans = pose['Bip01 Pelvis']
-            local = E.qrot(E.qconj(root_rot), travel)
-            pose['Bip01 Pelvis'] = (pelvis_rot, tuple(a + b for a, b in zip(pelvis_trans, local)))
         pose['Bip01'] = (root_rot, (0.0, 0.0, z))
+        if lunge is None:
+            return pose
+        # Bip01's horizontal translation would move the player (the engine accumulates it), so the
+        # hip travel goes on the pelvis instead: body and camera lunge, the feet keep their planted
+        # spots, the player stays put.
+        x0, y0 = lunge['root']
+        travel = (HIP_MOTION * (x - x0), HIP_MOTION * (y - y0), 0.0)
+        pelvis_rot, pelvis_trans = pose['Bip01 Pelvis']
+        local = E.qrot(E.qconj(root_rot), travel)
+        pose['Bip01 Pelvis'] = (pelvis_rot, tuple(a + b for a, b in zip(pelvis_trans, local)))
+        if HIP_MOTION < 1.0:
+            # The feet's 3rd-person paths, from where the section starts, scaled like the hips.
+            t_theirs = lunge['warp'](t)
+            for leg in LEGS:
+                start = lunge['feet'][leg[2]]
+                now = E.world(self.theirs_kf, leg[2], t_theirs)[1]
+                target = (start[0] - x0 + HIP_MOTION * (now[0] - start[0]),
+                          start[1] - y0 + HIP_MOTION * (now[1] - start[1]), now[2])
+                self.ik_miss.append(reach(pose, self.theirs_kf, leg, target))
         return pose
 
     def sample_times(self, extra_source_times=()):
@@ -642,6 +741,7 @@ def build(ours_path, theirs_path, out_path, reference=None):
                 ours.steps = [(0.0, 'loop')]
                 theirs.steps = [(0.0, 'loop')]
             seg = LocomotionSegment(ours, theirs, theirs_kf, offset)
+            seg.sway = SWAY  # the setting at build time, not at import
             seg.mean_sway = mean_sway(ours_kf, seg)
         else:
             seg = StillSegment(name, keys, ours_kf, theirs_kf, their_groups, offset)
@@ -752,6 +852,8 @@ def report(segments):
         extra = ''
         if seg.swing:
             extra = ', swing up to %.1f deg (%.1f kept)' % (max(seg.swing), max(seg.swing) * seg.sway)
+        if max(getattr(seg, 'ik_miss', [0.0])) > 0.05:
+            extra += ', feet IK short of the target by up to %.1f units' % max(seg.ik_miss)
         print('  %-24s %s%s, waist twist up to %.1f deg' % (seg.name, seg.describe(), extra, max(seg.waist_twist)))
 
 

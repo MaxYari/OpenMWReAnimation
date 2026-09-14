@@ -354,6 +354,22 @@ def main(fba_folder, data_files, out_folder):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 4:
-        sys.exit(__doc__)
-    main(*sys.argv[1:])
+    import argparse
+    from params import ask
+    p = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
+    p.add_argument('--fba')
+    p.add_argument('--data')
+    p.add_argument('--out')
+    a = p.parse_args()
+    main(ask(a.fba, 'FBA folder',
+             "OpenMW Full Body Awareness's folder: its meshes/*.1st.kf animations get 1st-person fingers "
+             'and its plugin tells which hand parts to put back.',
+             '/run/media/deck/350243d8-7578-45fe-a92c-ff83eadd4827/Games/openmw mods/'
+             '(FBA Bodies-Wearables) Vanilla and Pluginless VSBR-56625-2-3-1748243171/OpenMW Full Body Awareness',
+             str),
+         ask(a.data, 'Morrowind Data Files folder',
+             'Where Morrowind.bsa and Morrowind/Tribunal/Bloodmoon.esm are: the vanilla hand meshes and '
+             'records come from there.', '/var/run/media/mmcblk0p1/steamapps/common/Morrowind/Data Files', str),
+         ask(a.out, 'Output folder',
+             'Where the package goes (meshes/ and the plugin). Load it after FBA.',
+             '/run/media/deck/350243d8-7578-45fe-a92c-ff83eadd4827/Games/openmw mods/FBA 1st-Person Hands', str))
