@@ -1,4 +1,4 @@
-# ReAnimation - first-person - v3: Complete
+# 𖤝 ReAnimation - first-person - v3: Complete
 ![alt text](imgs/preview.png)
 
 **v3: it  is  out  ba-beeeey!!!**
@@ -11,7 +11,7 @@ Overall twice as much animation juice as the original game.
 
 Developed for OpenMW engine. Requires OpenMW 0.51+.
 
-## Check out my cool donation banner
+## 𖤝 Check out my cool donation banner
 
 I also have a cool donation banner now:
 
@@ -19,15 +19,15 @@ I also have a cool donation banner now:
 
 Thank you for being around, and have fun :) 
 
-## Appreciation
+## 𖤝 Appreciation
 
 Thanks to [fallchildren](https://github.com/fallchildren2) for code contributions and motivating me to expose a (somewhat) proper API.
 
 Thanks to [taitechnic](https://forums.nexusmods.com/profile/193965921-taitechnic/) and [S3ctor](https://github.com/magicaldave) for the code contribution and optimisation help.
 
-My thanks go to OpenMW discord community for massively helping me overcome a multitude of Lua hurdles, testing and providing feedback.
+My thanks go to OpenMW discord community for massively helping me overcome a multitude of Lua hurdles, testing and providing feedback, with a special thanks to [SPITSFIRE](https://www.nexusmods.com/profile/SPITSPHIRE/mods) for discovering and investigating a number of v3 issues.
 
-## A lot of gifs
+## 𖤝 A lot of gifs
 
 That show _some_ of the animations. (Give them some time to load)
 
@@ -41,8 +41,9 @@ That show _some_ of the animations. (Give them some time to load)
 ![Throwing Star](imgs/demo_throwing_star.webp)
 ![Bow walk and shoot](/imgs/demo_bow.gif)
 
-## How to install
+## 𖤝 How to install
 
+1) Install the dependency [Max Yari's Script Services](https://github.com/MaxYari/MaxYarisScriptServicesOpenMW) (Most of my lua mods require it now)
 1) **With a mod organiser**: Download this repository as an archive and drag and drop it into your mod organiser of choice (e.g [Mod Organizer 2](https://github.com/ModOrganizer2/modorganizer/releases) on Windows or [Nerevarine Organizer](https://github.com/grazelandsnomad/nerevarine_organizer/releases/tag/v0.70) on Linux).  
 **Or**: [read this tutorial](https://modding-openmw.com/tips/installing-mods/)
 on how to install mods using the launcher or completely manually (it's also very easy). 
@@ -63,7 +64,7 @@ on how to install mods using the launcher or completely manually (it's also very
 
 *NOTE #3*: If you _only_ want to use ReAnimation as an API  for another mod (i.e only as a dependency that doesnt add any animations on its own) - only enable `ReAnimation_API` AND delete "Animations" folder from within this mod.
 
-## Mod suggestions
+## 𖤝 Mod suggestions
 
 [Dynamic Camera](https://www.nexusmods.com/morrowind/mods/55327) for more dynamic first person camera and visual effects. "Trust me bro" its not some annoying head bob - its subtle, tasteful and makes the experience feel more polished.
 
@@ -72,7 +73,7 @@ on how to install mods using the launcher or completely manually (it's also very
 If you would like NPCs to also have alternating attack animations - try [3rd Person Alt Attacks](https://modding-openmw.com/mods/3rd-person-alt-attacks/) by [fallchildren](https://github.com/fallchildren2) (These animations are made in a different style and dont exactly match mine, but you might enjoy them)
 
 
-## Mod compatibility
+## 𖤝 Mod compatibility
 
 Compatible with practically any other animation mod. ReAnimation uses OpenMW system of animation overrides and will only override a specific set of animations. Recommended to use with [MCAR](https://www.nexusmods.com/morrowind/mods/48628) for delightfull swimming and casting animations, but will work just fine without it. MCAR should be situated in a load order before ReAnimation.
 
@@ -81,14 +82,14 @@ Compatible with practically any other animation mod. ReAnimation uses OpenMW sys
 [Full Body Awareness](https://www.nexusmods.com/morrowind/mods/56625) is currently not supported but a compatible version or ReAnimation is in the works (I hope im not jinxing it)
 
 
-## Vanilla/MWSE compatibility
+## 𖤝 Vanilla/MWSE compatibility
 
 Only v1 version of this mod (far fewer animations in comparison to v3, no alternating attacks e.t.c) is available for vanilla Morrowind, you can find v1 in the downloads section on nexus.
 
 v3 is not currently compatible. If you would like to port the scripting part to MWSE - please do, I'm not familiar with MWSE and am not planning to change that.
 However, if possible - keep this mod as a dependency, instead of reuploading the whole thing.
 
-## For Modders
+## 𖤝 For Modders
 
 Let me preface this by saying that the text below is 75% human written but then never properly proof-read or checked for spelling, and the rest of 25% is AI slop-generated. Nevertheless it should contain all the information you might need, sorry if its too annoying to read :)
 
@@ -183,9 +184,11 @@ I.ReAnimation.removeAnimationOverride("my_override_id")
 ```
 Where `my_override_id` is an id you provided to the override in `addAnimationOverride` (if you provided such an id at all).
 
-## AI Disclaimer
+## 𖤝 AI Disclaimer
 
 During v3 development Claude Code was used heavily for essentially automating and simplfying evering around animation production which is not animation production itself: e.g developing scripts, finding info in the OpenMW source code and archives, improving the animation toolset, improving and optimising the API. Despite all the obvious ethical and enviromental concerns that come with AI use, truth be told, without the ability to offload absolute tons of tedium to an AI - I dont think this update would ever been possible.
+
+🤖 Clank clank.
 
 
 
