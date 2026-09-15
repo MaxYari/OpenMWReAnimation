@@ -41,7 +41,7 @@ env:
   # From the "Advanced" panel of the main file on Nexus. Not secret.
   NEXUSMODS_FILE_ID: "3306256"
   NEXUSMODS_MOD_ID: "429496782196" # internal mod ID, not the one from the page URL
-  FILE_DISPLAY_NAME: ReAnimation v2 Rogue - OpenMW
+  FILE_DISPLAY_NAME: ReAnimation v3 - Complete - OpenMW
   ZIP_NAME: ReAnimation
   VERSION_SOURCE: scripts/MaxYari/ReAnimation_v3/ReAnimationAPI.lua
 

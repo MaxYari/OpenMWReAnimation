@@ -27,6 +27,8 @@ Thanks to [taitechnic](https://forums.nexusmods.com/profile/193965921-taitechnic
 
 My thanks go to OpenMW discord community for massively helping me overcome a multitude of Lua hurdles, testing and providing feedback, with a special thanks to [SPITSFIRE](https://www.nexusmods.com/profile/SPITSPHIRE/mods) for discovering and investigating a number of v3 issues.
 
+Thanks to [MrArrean](https://www.nexusmods.com/profile/MrArrean/mods) for annoyingly critical attitude that helped me to improve some of the animation feel (❤) 
+
 ## 𖤝 A lot of gifs
 
 That show _some_ of the animations. (Give them some time to load)
