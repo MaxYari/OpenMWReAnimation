@@ -922,7 +922,7 @@ end
 return {
     interfaceName = "ReAnimation",
     interface = {
-        version = 2.9,
+        version = 3.1,
         ARMATURE_TYPE = gutils.ARMATURE_TYPE,
         STANCE = gutils.STANCE,
         SUB_ATTACK_MODE = gutils.SUB_ATTACK_MODE,
