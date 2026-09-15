@@ -1,15 +1,13 @@
 # 𖤝 ReAnimation - first-person - v3: Complete
 ![alt text](imgs/preview.png)
 
-**v3: it  is  out  ba-beeeey!!!**
-
 An immersive reimagining of the TES3: Morrowind 1st-person animations. Punch, slash, chop, shoot and _thrust_ your way through vvardenfell with style! 
 
 Absolute most animations are remade from scratch and many more animations are added to break up the repetative attack animation spam. Furthermore some weapon subtypes received few additional unique animations (shortblades and katanas).
 
 Overall twice as much animation juice as the original game.
 
-Developed for OpenMW engine. Requires OpenMW 0.51+.
+Developed for OpenMW engine. **Requires OpenMW 0.51+**.
 
 ## 𖤝 Check out my cool donation banner
 
@@ -43,10 +41,11 @@ That show _some_ of the animations. (Give them some time to load)
 
 ## 𖤝 How to install
 
+**Requires OpenMW 0.51+**
+
 1) Install the dependency [Max Yari's Script Services](https://github.com/MaxYari/MaxYarisScriptServicesOpenMW) (Most of my lua mods require it now)
-1) **With a mod organiser**: Download this repository as an archive and drag and drop it into your mod organiser of choice (e.g [Mod Organizer 2](https://github.com/ModOrganizer2/modorganizer/releases) on Windows or [Nerevarine Organizer](https://github.com/grazelandsnomad/nerevarine_organizer/releases/tag/v0.70) on Linux).  
-**Or**: [read this tutorial](https://modding-openmw.com/tips/installing-mods/)
-on how to install mods using the launcher or completely manually (it's also very easy). 
+1) Install this mod **With a mod organiser**: Download this repository as an archive and drag and drop it into your mod organiser of choice (e.g [Mod Organizer 2](https://github.com/ModOrganizer2/modorganizer/releases) on Windows or [Nerevarine Organizer](https://github.com/grazelandsnomad/nerevarine_organizer/releases/tag/v0.70) on Linux).  
+**Or**: [read this tutorial](https://modding-openmw.com/tips/installing-mods/) on how to install mods using the launcher or completely manually (it's also very easy). 
 
 2) Enable the mod's .omwscript files in "Content Files" tab of the OpenMW launcher ( `ReAnimation_API` and `ReAnimation_v3` at the time of writing). 
 
