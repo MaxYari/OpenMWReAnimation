@@ -1,0 +1,106 @@
+[size=6][b]𖤝 ReAnimation - first-person - v3: Complete[/b][/size]
+
+[img]https://raw.githubusercontent.com/MaxYari/OpenMWReAnimation/main/imgs/preview.png[/img]
+
+An immersive reimagining of the TES3: Morrowind 1st-person animations. Punch, slash, chop, shoot and [i]thrust[/i] your way through vvardenfell with style!
+
+Absolute most animations are remade from scratch and many more animations are added to break up the repetative attack animation spam. Furthermore some weapon subtypes received few additional unique animations (shortblades and katanas).
+
+Overall twice as much animation juice as the original game.
+
+Does not include spellcasting animations.
+
+Developed for OpenMW engine. [b]Requires OpenMW 0.51+[/b].
+
+[size=5][b]𖤝 Check out my cool donation banner[/b][/size]
+
+I also have a cool donation banner now:
+
+[url=https://ko-fi.com/maxyari][img]https://raw.githubusercontent.com/MaxYari/OpenMWReAnimation/main/imgs/morrowind_kofi_banner_left_half_bright124.gif[/img][/url][url=https://ko-fi.com/maxyari][img]https://raw.githubusercontent.com/MaxYari/OpenMWReAnimation/main/imgs/nexus/banner_right.png[/img][/url]
+[url=https://ko-fi.com/maxyari][img]https://raw.githubusercontent.com/MaxYari/OpenMWReAnimation/main/imgs/nexus/banner_glow.png[/img][/url]
+
+Thank you for being around, and have fun :)
+
+[size=5][b]𖤝 Appreciation[/b][/size]
+
+Thanks to [url=https://github.com/fallchildren2]fallchildren[/url] for code contributions and motivating me to expose a (somewhat) proper API.
+
+Thanks to [url=https://forums.nexusmods.com/profile/193965921-taitechnic/]taitechnic[/url] and [url=https://github.com/magicaldave]S3ctor[/url] for the code contribution and optimisation help.
+
+My thanks go to OpenMW discord community for massively helping me overcome a multitude of Lua hurdles, testing and providing feedback, with a special thanks to [url=https://www.nexusmods.com/profile/SPITSPHIRE/mods]SPITSFIRE[/url] for discovering and investigating a number of v3 issues.
+
+[size=5][b]𖤝 A lot of gifs[/b][/size]
+
+That show [i]some[/i] of the animations. (Give them some time to load)
+
+[img]https://raw.githubusercontent.com/MaxYari/OpenMWReAnimation/main/imgs/demo_punches.webp[/img] [img]https://raw.githubusercontent.com/MaxYari/OpenMWReAnimation/main/imgs/demo_spear.webp[/img] [img]https://raw.githubusercontent.com/MaxYari/OpenMWReAnimation/main/imgs/demo_claymore.webp[/img] [img]https://raw.githubusercontent.com/MaxYari/OpenMWReAnimation/main/imgs/demo_staff.webp[/img] [img]https://raw.githubusercontent.com/MaxYari/OpenMWReAnimation/main/imgs/demo_one_handed.webp[/img] [img]https://raw.githubusercontent.com/MaxYari/OpenMWReAnimation/main/imgs/demo_katana.webp[/img] [img]https://raw.githubusercontent.com/MaxYari/OpenMWReAnimation/main/imgs/demo_crossbow.webp[/img] [img]https://raw.githubusercontent.com/MaxYari/OpenMWReAnimation/main/imgs/demo_throwing_star.webp[/img] [img]https://raw.githubusercontent.com/MaxYari/OpenMWReAnimation/main/imgs/demo_bow.gif[/img]
+
+[size=5][b]𖤝 How to install[/b][/size]
+
+[b]Requires OpenMW 0.51+[/b]
+
+[list=1]
+[*]Install the dependency [url=https://www.nexusmods.com/morrowind/mods/60256]Max Yari's Script Services (MSS)[/url] (Most of my lua mods require it now)
+[*]Install this mod [b]With a mod organiser[/b]: Download this repository as an archive and drag and drop it into your mod organiser of choice (e.g [url=https://github.com/ModOrganizer2/modorganizer/releases]Mod Organizer 2[/url] on Windows or [url=https://github.com/grazelandsnomad/nerevarine_organizer/releases/tag/v0.70]Nerevarine Organizer[/url] on Linux).
+[/list]
+
+[b]Or[/b]: [url=https://modding-openmw.com/tips/installing-mods/]read this tutorial[/url] on how to install mods using the launcher or completely manually (it's also very easy).
+
+[list=1]
+[*]Enable the mod's .omwscript files in "Content Files" tab of the OpenMW launcher ( [font=Courier New]ReAnimation_API[/font] and [font=Courier New]ReAnimation_v3[/font] at the time of writing).
+[*]OpenMW Launcher -> Settings -> Visuals -> Animations: "Use Additional Animation Sources" and "Smooth Animation Transitions" must be enabled!
+[*][i]VERY OPTIONAL[/i]: Setting your view-model (1st-person model) field of view to a higher value makes the first person experience a bit more exciting, note this is not the same as field of view in game settings, you can find how to change it in this [url=https://www.reddit.com/r/OpenMW/comments/1i2dl4r/anyway_to_change_viewmodel_fov/]reddit post[/url]. Try a value of 75 or 70.
+[*]... ???
+[*]PROFIT (Play)
+[/list]
+
+[i]NOTE #0[/i]: If you want to use this with [url=https://www.nexusmods.com/morrowind/mods/56625]Full Body Awareness[/url] now theres a compatibility patch, read below in Mod Compatibility section for details.
+
+[i]NOTE #1[/i]: In Morrowind Mod Organiser you might see a dialog box with a "The contents of <data files> does not look valid" error, this is fine and expected, Mod Organiser is just not aware of how additional animations work in OpenMW, you can safely press OK without changing anything.
+
+[i]NOTE #2[/i]: OpenMW camera 1st person head-bob (the one that can be enabled in scripts in-game) may slightly conflict with the walk cycle animation, it's not too bad, but the mod was developed assuming that setting is turned off.
+
+[i]NOTE #3[/i]: If you [i]only[/i] want to use ReAnimation as an API  for another mod (i.e only as a dependency that doesnt add any animations on its own) - only enable [font=Courier New]ReAnimation_API[/font] AND delete "Animations" folder from within this mod.
+
+[size=5][b]𖤝 Mod suggestions[/b][/size]
+
+[url=https://www.nexusmods.com/morrowind/mods/56625]Full Body Awareness[/url] to see your own body in first person. Supported through two extra archives, see Mod compatibility below.
+
+[url=https://www.nexusmods.com/morrowind/mods/55327]Dynamic Camera[/url] for more dynamic first person camera and visual effects. "Trust me bro" its not some annoying head bob - its subtle, tasteful and makes the experience feel more polished. Also an update for Dynamic Camera is in the works that will further improve [url=https://www.nexusmods.com/morrowind/mods/56625]Full Body Awareness[/url] experience.
+
+[url=https://www.nexusmods.com/morrowind/mods/56584]Dynamic Reticle[/url] mostly for hit markers to make hits (especially marksman ones) more impactfull.
+
+If you would like NPCs to also have alternating attack animations - try [url=https://modding-openmw.com/mods/3rd-person-alt-attacks/]3rd Person Alt Attacks[/url] by [url=https://github.com/fallchildren2]fallchildren[/url] (These animations are made in a different style and dont exactly match mine, but you might enjoy them)
+
+[size=5][b]𖤝 Mod compatibility[/b][/size]
+
+[b][url=https://www.nexusmods.com/morrowind/mods/56625]Full Body Awareness[/url] (FBA)[/b] is supported through two optional archives in this mod's Nexus files:
+
+[list]
+[*][b]ReAnimation FBA Compatibility[/b]: ReAnimation's animations merged with FBA's, so your legs and body move with them.
+[*][b]FBA 1st-Person Hands[/b]: puts the vanilla 1st-person hands back and adapts FBA's own animations to them.
+[/list]
+
+Install both like any other mod. Load order: FBA -> FBA 1st-Person Hands -> ReAnimation -> ReAnimation FBA Compatibility, and enable [font=Courier New]FBA_1stPersonHands.omwaddon[/font] after FBA's plugin.
+
+To merge other animation mods with FBA, or rebuild with different settings, use the script that comes with ReAnimation: [font=Courier New]Sources/Tools/FBACompat/build_compat.py[/font] (see its [url=https://github.com/MaxYari/OpenMWReAnimation/blob/main/Sources/Tools/FBACompat/README.md]README[/url]).
+
+In general Reanimation is compatible with practically any other animation mod. ReAnimation uses OpenMW system of animation overrides and will only override a specific set of animations. Recommended to use with [url=https://www.nexusmods.com/morrowind/mods/48628]MCAR[/url] for delightfull swimming and casting animations, but will work just fine without it. MCAR should be situated in a load order before ReAnimation.
+
+[url=https://www.nexusmods.com/morrowind/mods/48387]Better Bodies[/url] (while not wearing shoulder armor) and maybe other body replacers, as well as some custom modded shoulder armors or full body armors - all display a sharp protruding polygon at on the left side of the screen while sneaking with a dagger. This seem to be more of an asset issue and/or a general messed up way how sneak works under the hood (by essentially dislocating character's neck). [i]I THINK[/i] (I havent tested it myself because im lazy) using [url=https://www.nexusmods.com/morrowind/mods/55241]Smooth first-person Sneak for OpenMW[/url] should completely fix the issue.
+
+[size=5][b]𖤝 Vanilla/MWSE compatibility[/b][/size]
+
+Only v1 version of this mod (far fewer animations in comparison to v3, no alternating attacks e.t.c) is available for vanilla Morrowind, you can find v1 in the downloads section on nexus.
+
+v3 is not currently compatible. If you would like to port the scripting part to MWSE - please do, I'm not familiar with MWSE and am not planning to change that. However, if possible - keep this mod as a dependency, instead of reuploading the whole thing.
+
+[size=5][b]𖤝 For Modders[/b][/size]
+
+ReAnimation exposes an API (an interface for other mods to use): alternating and substitute attack animations for different weapons, attack "tails" that let an attack animation end as long and smoothly as you want, and generic conditional animation overrides. All of it is documented in the [url=https://github.com/MaxYari/OpenMWReAnimation#basics]git repository[/url]. If you are already reading this on git - just read below.
+
+[size=5][b]𖤝 AI Disclaimer[/b][/size]
+
+During v3 development Claude Code was used heavily for essentially automating and simplfying evering around animation production which is not animation production itself: e.g developing scripts, finding info in the OpenMW source code and archives, improving the animation toolset, improving and optimising the API. Despite all the obvious ethical and enviromental concerns that come with AI use, truth be told, without the ability to offload absolute tons of tedium to an AI - I dont think this update would ever been possible.
+
+🤖 Clank clank.
