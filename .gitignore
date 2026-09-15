@@ -4,3 +4,6 @@
 !Sources/*.blend
 .claude/
 OPENMW_LUA_API_REFERENCE.md
+# Local output of tools/build_nexus_zip.sh
+nexus-upload.zip
+__pycache__/

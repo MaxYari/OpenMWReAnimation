@@ -7,6 +7,8 @@ Absolute most animations are remade from scratch and many more animations are ad
 
 Overall twice as much animation juice as the original game.
 
+Does not include spellcasting animations.
+
 Developed for OpenMW engine. **Requires OpenMW 0.51+**.
 
 ## 𖤝 Check out my cool donation banner
@@ -43,19 +45,22 @@ That show _some_ of the animations. (Give them some time to load)
 
 **Requires OpenMW 0.51+**
 
-1) Install the dependency [Max Yari's Script Services](https://github.com/MaxYari/MaxYarisScriptServicesOpenMW) (Most of my lua mods require it now)
-1) Install this mod **With a mod organiser**: Download this repository as an archive and drag and drop it into your mod organiser of choice (e.g [Mod Organizer 2](https://github.com/ModOrganizer2/modorganizer/releases) on Windows or [Nerevarine Organizer](https://github.com/grazelandsnomad/nerevarine_organizer/releases/tag/v0.70) on Linux).  
+1) Install the dependency [Max Yari's Script Services (MSS)](https://www.nexusmods.com/morrowind/mods/60256) (Most of my lua mods require it now)
+
+2) Install this mod **With a mod organiser**: Download this repository as an archive and drag and drop it into your mod organiser of choice (e.g [Mod Organizer 2](https://github.com/ModOrganizer2/modorganizer/releases) on Windows or [Nerevarine Organizer](https://github.com/grazelandsnomad/nerevarine_organizer/releases/tag/v0.70) on Linux).  
 **Or**: [read this tutorial](https://modding-openmw.com/tips/installing-mods/) on how to install mods using the launcher or completely manually (it's also very easy). 
 
-2) Enable the mod's .omwscript files in "Content Files" tab of the OpenMW launcher ( `ReAnimation_API` and `ReAnimation_v3` at the time of writing). 
+3) Enable the mod's .omwscript files in "Content Files" tab of the OpenMW launcher ( `ReAnimation_API` and `ReAnimation_v3` at the time of writing). 
 
-3) OpenMW Launcher -> Settings -> Visuals -> Animations: "Use Additional Animation Sources" and "Smooth Animation Transitions" must be enabled!
+4) OpenMW Launcher -> Settings -> Visuals -> Animations: "Use Additional Animation Sources" and "Smooth Animation Transitions" must be enabled!
 
-4) _VERY OPTIONAL_: Setting your view-model (1st-person model) field of view to a higher value makes the first person experience a bit more exciting, note this is not the same as field of view in game settings, you can find how to change it in this [reddit post](https://www.reddit.com/r/OpenMW/comments/1i2dl4r/anyway_to_change_viewmodel_fov/). Try a value of 75 or 70.
+5) _VERY OPTIONAL_: Setting your view-model (1st-person model) field of view to a higher value makes the first person experience a bit more exciting, note this is not the same as field of view in game settings, you can find how to change it in this [reddit post](https://www.reddit.com/r/OpenMW/comments/1i2dl4r/anyway_to_change_viewmodel_fov/). Try a value of 75 or 70.
 
-4) ... ???
+6) ... ???
 
-5) PROFIT (Play)
+7) PROFIT (Play)
+
+*NOTE #0*: If you want to use this with [Full Body Awareness](https://www.nexusmods.com/morrowind/mods/56625) now theres a compatibility patch, read below in Mod Compatibility section for details.
 
 *NOTE #1*: In Morrowind Mod Organiser you might see a dialog box with a "The contents of <data files> does not look valid" error, this is fine and expected, Mod Organiser is just not aware of how additional animations work in OpenMW, you can safely press OK without changing anything.
 
@@ -65,7 +70,9 @@ That show _some_ of the animations. (Give them some time to load)
 
 ## 𖤝 Mod suggestions
 
-[Dynamic Camera](https://www.nexusmods.com/morrowind/mods/55327) for more dynamic first person camera and visual effects. "Trust me bro" its not some annoying head bob - its subtle, tasteful and makes the experience feel more polished.
+[Full Body Awareness](https://www.nexusmods.com/morrowind/mods/56625) to see your own body in first person. Supported through two extra archives, see Mod compatibility below.
+
+[Dynamic Camera](https://www.nexusmods.com/morrowind/mods/55327) for more dynamic first person camera and visual effects. "Trust me bro" its not some annoying head bob - its subtle, tasteful and makes the experience feel more polished. Also an update for Dynamic Camera is in the works that will further improve [Full Body Awareness](https://www.nexusmods.com/morrowind/mods/56625) experience.
 
 [Dynamic Reticle](https://www.nexusmods.com/morrowind/mods/56584) mostly for hit markers to make hits (especially marksman ones) more impactfull.
 
@@ -74,12 +81,17 @@ If you would like NPCs to also have alternating attack animations - try [3rd Per
 
 ## 𖤝 Mod compatibility
 
-Compatible with practically any other animation mod. ReAnimation uses OpenMW system of animation overrides and will only override a specific set of animations. Recommended to use with [MCAR](https://www.nexusmods.com/morrowind/mods/48628) for delightfull swimming and casting animations, but will work just fine without it. MCAR should be situated in a load order before ReAnimation.
+**[Full Body Awareness](https://www.nexusmods.com/morrowind/mods/56625) (FBA)** is supported through two optional archives in this mod's Nexus files:
+- **ReAnimation FBA Compatibility**: ReAnimation's animations merged with FBA's, so your legs and body move with them.
+- **FBA 1st-Person Hands**: puts the vanilla 1st-person hands back and adapts FBA's own animations to them.
+
+Install both like any other mod. Load order: FBA -> FBA 1st-Person Hands -> ReAnimation -> ReAnimation FBA Compatibility, and enable `FBA_1stPersonHands.omwaddon` after FBA's plugin.
+
+To merge other animation mods with FBA, or rebuild with different settings, use the script that comes with ReAnimation: `Sources/Tools/FBACompat/build_compat.py` (see its [README](Sources/Tools/FBACompat/README.md)).
+
+In general Reanimation is compatible with practically any other animation mod. ReAnimation uses OpenMW system of animation overrides and will only override a specific set of animations. Recommended to use with [MCAR](https://www.nexusmods.com/morrowind/mods/48628) for delightfull swimming and casting animations, but will work just fine without it. MCAR should be situated in a load order before ReAnimation.
 
 [Better Bodies](https://www.nexusmods.com/morrowind/mods/48387) (while not wearing shoulder armor) and maybe other body replacers, as well as some custom modded shoulder armors or full body armors - all display a sharp protruding polygon at on the left side of the screen while sneaking with a dagger. This seem to be more of an asset issue and/or a general messed up way how sneak works under the hood (by essentially dislocating character's neck). _I THINK_ (I havent tested it myself because im lazy) using [Smooth first-person Sneak for OpenMW](https://www.nexusmods.com/morrowind/mods/55241) should completely fix the issue.
-
-[Full Body Awareness](https://www.nexusmods.com/morrowind/mods/56625) is currently not supported but a compatible version or ReAnimation is in the works (I hope im not jinxing it)
-
 
 ## 𖤝 Vanilla/MWSE compatibility
 
@@ -90,6 +102,9 @@ However, if possible - keep this mod as a dependency, instead of reuploading the
 
 ## 𖤝 For Modders
 
+ReAnimation exposes an API (an interface for other mods to use): alternating and substitute attack animations for different weapons, attack "tails" that let an attack animation end as long and smoothly as you want, and generic conditional animation overrides. All of it is documented in the [git repository](https://github.com/MaxYari/OpenMWReAnimation#basics). If you are already reading this on git - just read below.
+
+<!-- nexus-skip-start -->
 Let me preface this by saying that the text below is 75% human written but then never properly proof-read or checked for spelling, and the rest of 25% is AI slop-generated. Nevertheless it should contain all the information you might need, sorry if its too annoying to read :)
 
 ### Basics
@@ -182,6 +197,8 @@ Added overrides can be removed using
 I.ReAnimation.removeAnimationOverride("my_override_id")
 ```
 Where `my_override_id` is an id you provided to the override in `addAnimationOverride` (if you provided such an id at all).
+
+<!-- nexus-skip-end -->
 
 ## 𖤝 AI Disclaimer
 

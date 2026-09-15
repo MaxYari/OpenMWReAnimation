@@ -1,4 +1,4 @@
-local mp = "scripts/MaxYari/ReAnimation_v2/"
+local mp = "scripts/MaxYari/ReAnimation_v3/"
 
 local omwself = require('openmw.self')
 local types = require('openmw.types')

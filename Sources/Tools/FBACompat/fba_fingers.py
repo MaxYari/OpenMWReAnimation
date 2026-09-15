@@ -355,21 +355,17 @@ def main(fba_folder, data_files, out_folder):
 
 if __name__ == '__main__':
     import argparse
+    import params
     from params import ask
-    p = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    p.add_argument('--fba')
-    p.add_argument('--data')
-    p.add_argument('--out')
+    p = argparse.ArgumentParser(
+        description='Builds the FBA 1st-Person Hands package. Settings not given here are asked for, '
+                    'with the default filled in (Enter keeps it).')
+    p.add_argument('-y', '--yes', action='store_true', help='use the defaults for everything not given, no questions')
+    p.add_argument('--fba', metavar='DIR', help="FBA's folder (has meshes/xbase_anim.1st.kf)")
+    p.add_argument('--data', metavar='DIR', help="Morrowind's Data Files (has Morrowind.bsa)")
+    p.add_argument('--out', metavar='DIR', help='where the package goes')
     a = p.parse_args()
-    main(ask(a.fba, 'FBA folder',
-             "OpenMW Full Body Awareness's folder: its meshes/*.1st.kf animations get 1st-person fingers "
-             'and its plugin tells which hand parts to put back.',
-             '/run/media/deck/350243d8-7578-45fe-a92c-ff83eadd4827/Games/openmw mods/'
-             '(FBA Bodies-Wearables) Vanilla and Pluginless VSBR-56625-2-3-1748243171/OpenMW Full Body Awareness',
-             str),
-         ask(a.data, 'Morrowind Data Files folder',
-             'Where Morrowind.bsa and Morrowind/Tribunal/Bloodmoon.esm are: the vanilla hand meshes and '
-             'records come from there.', '/var/run/media/mmcblk0p1/steamapps/common/Morrowind/Data Files', str),
-         ask(a.out, 'Output folder',
-             'Where the package goes (meshes/ and the plugin). Load it after FBA.',
-             '/run/media/deck/350243d8-7578-45fe-a92c-ff83eadd4827/Games/openmw mods/FBA 1st-Person Hands', str))
+    params.USE_DEFAULTS = a.yes
+    main(ask(a.fba, 'FBA folder', 'The one with meshes/xbase_anim.1st.kf.', params.find_fba(), str),
+         ask(a.data, 'Morrowind Data Files', 'The one with Morrowind.bsa.', params.find_data_files(), str),
+         ask(a.out, 'Output folder', 'Load it after FBA.', os.path.join(params.MODS, 'FBA 1st-Person Hands'), str))

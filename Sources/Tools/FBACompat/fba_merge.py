@@ -46,10 +46,12 @@ SWAY = 0.33
 # so body and camera move while the player's position does not. Below 1.0 each foot's horizontal path
 # is scaled by the same share (planted feet stay where they are, steps get shorter) and the legs are
 # bent to reach it (reach()).
-HIP_MOTION = 1.0
+HIP_MOTION = 0.5
 # Use the weapon's idle legs in attack/equip sections where the 3rd-person pose lifts both feet off
 # the floor (FBA's crossbow reload, once the torso is held upright).
 IDLE_WHEN_FEET_LIFT = True
+# Print per-group detail while building (-v); warnings are collected in WARNINGS either way.
+VERBOSE = False
 IDENTITY = (1.0, 0.0, 0.0, 0.0)
 FPS = 30.0
 SEGMENT_GAP = 0.2
@@ -76,7 +78,12 @@ _current_file = ['']
 
 def warn(message):
     WARNINGS.append('%s: %s' % (_current_file[0], message))
-    print('  warning: ' + message)
+    info('  warning: ' + message)
+
+
+def info(message):
+    if VERBOSE:
+        print(message)
 
 
 # ---- text keys --------------------------------------------------------------
@@ -280,7 +287,7 @@ class Group:
             rz = E.world(kf, 'Bip01 R Foot', t)[1][2]
             actual = 'left' if lz < rz else 'right'
             if actual != foot:
-                print('  %s: SoundGen %s at %.3f has the %s foot down, using %s' % (
+                info('  %s: SoundGen %s at %.3f has the %s foot down, using %s' % (
                     self.name, foot, t, actual, actual))
             fixed.append((phase, actual))
         self.steps = fixed
@@ -494,7 +501,7 @@ def key_warps(group, ours_keys, theirs_keys):
             if kept and abs(kept[-1][0] - t1) < EPS:
                 kept[-1] = (kept[-1][0], max(kept[-1][1], t3))
             elif kept and t3 < kept[-1][1]:
-                print('  %s: key %r runs backwards in the 3rd person, skipped' % (group, k))
+                info('  %s: key %r runs backwards in the 3rd person, skipped' % (group, k))
             else:
                 kept.append((t1, t3))
         if len(kept) < 2:
@@ -680,6 +687,7 @@ def add_rest_bones(ours_kf, reference):
     bow set has no Bip01): the merge needs our pose there, and in game that pose comes from the rig."""
     times = [tm for tm, _ in ours_kf.text_keys()]
     first, last = min(times), max(times)
+    added = []
     for b in LOWER_BONES:
         if b in ours_kf.bone_data and ours_kf.data(b).trans['keys'] and ours_kf.data(b).quat_keys + (
                 ours_kf.data(b).xyz or []):
@@ -693,7 +701,9 @@ def add_rest_bones(ours_kf, reference):
         d.xyz = None
         d.quat_keys = [(first, rot, ()), (last, rot, ())]
         d.trans = {'itype': 1, 'keys': [(first, trans, ()), (last, trans, ())]}
-        warn('%s not keyed, merged from the rig rest pose' % b)
+        added.append(b)
+    if added:
+        warn('%s not keyed, merged from the rig rest pose' % ', '.join(added))
 
 
 def build(ours_path, theirs_path, out_path, reference=None):
