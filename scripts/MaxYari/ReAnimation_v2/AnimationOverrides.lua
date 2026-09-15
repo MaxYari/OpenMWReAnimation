@@ -18,6 +18,12 @@ local selfActor = gutils.Actor:new(omwself)
 -- still a property call each, which is cheap: a bool straight out of the struct, no lookups.
 local controls = omwself.controls
 
+-- Max Yari's Script Services (MSS) is a required dependency: checked once, when this script loads.
+if not require('openmw.core').contentFiles.has("MaxYariScriptServices.omwscripts") then
+    print("[ReAnimation] ERROR: critical dependency is missing: Max Yari's Script Services (MSS). Please install it.")
+    require('openmw.ui').showMessage("ReAnimation: Critical dependency is missing, please install Max Yari's Script Services (MSS)")
+end
+
 local cloneAnimOptions = gutils.cloneAnimOptions
 
 -- Every override with a parent reads self.parentOptions when it starts on update, and the API only

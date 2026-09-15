@@ -127,12 +127,12 @@ end
 -- property backed by a C++ call that serializes a fresh string each access, and ids are stored as
 -- authored ("BM nordic silver claymore", "King's_Oath") so they need lowering to compare.
 --
--- A slot is fetched at most once per equipCacheTime seconds of real time (setEquipmentCacheTime,
--- default 0.1), so polling conditions - shield, torch and star overrides check every frame - cost a
--- getEquipment ten times a second rather than every frame. The price is that a swap is noticed up
--- to that long after it happens. Real time rather than simulation time: equipping happens in a
--- paused inventory, and the first frame after it must see the new item. Within one frame the clock
--- is read once per slot, and later calls that frame are a single integer compare.
+-- The slot is read through Max Yari's Script Services (MSS), at most once per equipCacheTime seconds
+-- (setEquipmentCacheTime, default 0.1) and shared with every other mod asking. Polling conditions -
+-- shield, torch and star overrides check every frame - so cost a getEquipment ten times a second
+-- rather than every frame; a swap is noticed up to that long after it happens. MSS expires the cache
+-- when a pause starts or ends, so an item equipped in the paused inventory is seen on the first frame
+-- after. The lowercased id is only rebuilt when MSS reports a different item.
 local EQUIPMENT_CACHE_TIME = 0.1
 local equipCacheTime = EQUIPMENT_CACHE_TIME
 local equipSlotCache = {}
@@ -140,17 +140,14 @@ local equipSlotCache = {}
 local function refreshEquippedItem(slot)
     local entry = equipSlotCache[slot]
     if entry == nil then
-        entry = { frame_n = -1, time = -math.huge }
+        entry = {}
         equipSlotCache[slot] = entry
     end
-    if entry.frame_n ~= frame_n then
-        entry.frame_n = frame_n
-        local now = core.getRealTime()
-        if now - entry.time >= equipCacheTime then
-            entry.time = now
-            entry.item = types.Actor.getEquipment(omwself, slot)
-            entry.id = entry.item and string.lower(entry.item.recordId) or nil
-        end
+    local info = I.MSS.getEquipmentInfo(slot, equipCacheTime)
+    if info ~= entry.info then
+        entry.info = info
+        entry.item = info and info.item
+        entry.id = info and string.lower(info.recordId) or nil
     end
     return entry
 end
