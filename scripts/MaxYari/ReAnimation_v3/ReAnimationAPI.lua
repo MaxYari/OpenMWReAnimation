@@ -65,7 +65,10 @@ end
 local function rebuildTrackedAnimsList()
     local newTrackedAnims = {}    
     for _, anims in pairs(animations) do
-        for _, anim in ipairs(anims) do
+        -- Backwards: onUpdate walks this list from the end, so it meets a parent's higher-ranked
+        -- overrides before its lower ones (see Override ranking).
+        for i = #anims, 1, -1 do
+            local anim = anims[i]
             anim.alwaysTracked = false
             if anim.running then
                 table.insert(newTrackedAnims, anim)                
@@ -205,7 +208,61 @@ local function addToAnimMap(anim)
         animations[key] = anims
     end
     -- print("Registering animation override with id for parent " .. key)
+
+    -- Ranked overrides are kept highest first among themselves, so the handler reaches a higher one
+    -- before every lower one it outranks (see Override ranking). A new one goes in front of the first
+    -- lower-ranked one; everything else keeps registration order, which some overrides rely on.
+    local rank = anim.overridePriority
+    if rank ~= nil then
+        for i = 1, #anims do
+            local otherRank = anims[i].overridePriority
+            if otherRank ~= nil and otherRank < rank then
+                table.insert(anims, i, anim)
+                return
+            end
+        end
+    end
     table.insert(anims, anim)
+end
+
+
+--- Override ranking --------------------
+-----------------------------------------
+-- Overrides on one parent that replace the same thing - a star idle and a sneak idle on idle1t, a
+-- katana attack set and the general two-handed one on weapontwohand - are ranked with
+-- `overridePriority` instead of writing each one's condition to exclude all the others. The higher
+-- one plays, and a lower one is not even asked while it does.
+--
+-- Unranked overrides (overridePriority nil, the default for addAnimationOverride) are outside this
+-- entirely. They are what layers on top of the others - the shield arm corrections share idle1t
+-- with the star idles - and are never stopped by, nor stop, a ranked one. Equal ranks do not
+-- outrank each other either, so those still need mutually exclusive conditions.
+--
+-- Both paths meet a parent's ranked overrides highest first: addToAnimMap keeps each parent's list
+-- in that order, and rebuildTrackedAnimsList lays the tracked list out so onUpdate does too.
+--   * The playBlended handler: the first ranked override that passes its checks takes the play.
+--     Every lower one after it is skipped without being asked.
+--   * onUpdate: while a higher one on its parent is running, a lower one is not asked to start, and
+--     one that is running is stopped through the usual stop path. Meeting the higher one first is
+--     what makes both handovers happen within one frame.
+-- Only onUpdate ever stops an outranked override: that path cancels, clears `running` and drops it
+-- from trackedAnims in one go, which the handler's wasRunning bookkeeping relies on.
+-- A higher override whose group is missing never takes a play, so the lower one plays instead.
+
+-- True while a higher-ranked override on the same parent is running. Pure Lua: flag reads only.
+local function isOutranked(anim)
+    local siblings = animations[anim.parent or "-"]
+    local rank = anim.overridePriority
+    for i = 1, #siblings do
+        local other = siblings[i]
+        local otherRank = other.overridePriority
+        if otherRank ~= nil then
+            -- Ranked siblings are sorted highest first, so from here on nothing outranks anim.
+            if otherRank <= rank then return false end
+            if other.running then return true end
+        end
+    end
+    return false
 end
 
 
@@ -400,6 +457,9 @@ animManager.addOnKeyHandler(onAnimationTextKey)
 --- -------------------------------------
 --- It is expected that an override has either a parent anim group assigned or startOnUpdate: true. Otherwise override will never start.
 --- Optional anim.onUpdate(self, dt) is called every frame while the override is running, after its stop check.
+--- Optional anim.overridePriority (number) ranks it against the other ranked overrides on its parent: a higher one that
+--- plays keeps lower ones from starting, and stops them. Leave it nil for an override that layers on top of others.
+--- See Override ranking.
 local function addAnimationOverride(anim)
     -- print("registering animation"  .. anim.groupname)
     if not anim.stance then anim.stance = gutils.STANCE.Weapon end -- Default value for backwards compatibility
@@ -479,9 +539,11 @@ params:
     armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
     stance = I.ReAnimation.STANCE.Weapon,   -- optional, defaults to Weapon
     subAttackMode = I.ReAnimation.SUB_ATTACK_MODE.Random,  -- optional, defaults to Random
+    timingMatching = I.ReAnimation.TIMING_MATCHING.None,   -- optional, defaults to None
     randomMaxRepeats = 3,                   -- optional, defaults to 3
     sequenceResetTime = 3,                  -- optional, seconds, defaults to 3
     condition = function(self) ... end,     -- optional, truthy for this set to apply at all
+    overridePriority = 0,                   -- optional, defaults to 0
     attacks = {
         chop   = { { "weapontwohand", "weapontwohandsub" }, { "weapontwohandalt" } },
         slash  = { { "weapontwohand" }, { "weapontwohandalt" } },
@@ -514,15 +576,80 @@ time, so time spent paused does not count.
 An attack type missing from `attacks` is left completely alone.
 
 `condition` gates the whole set, so several sets can share one parent group and be selected by
-weapon, stance or anything else - see getEquippedWeapon()/isEquippedWeapon(). Their conditions must
-be mutually exclusive: if two sets on the same parent are ever active together, both hide the parent
-and uniquify its priority, and the engine's equal-priority rule then erases one of them.
+weapon, stance or anything else - see getEquippedWeapon()/isEquippedWeapon(). Two sets on one parent
+must never be active together: both would hide the parent and uniquify its priority, and the
+engine's equal-priority rule then erases one of them. `overridePriority` takes care of that. Give
+the more specific set a higher one and a condition, and while that condition holds - for an attack
+type it lists - every lower set on the parent stands down, so the general set needs no condition at
+all. Attack sets are always ranked, at 0 unless given a priority, so a set another mod registers at
+1 or above outranks ReAnimation's own without either knowing about the other. Sets of equal priority
+still need mutually exclusive conditions. See Override ranking.
 
 Every variant group's textkey timings must match the parent's exactly, for the same reason as the
 old alternating attacks: the variant plays on top while the hidden parent's keys continue to drive
 the engine's hit timing and attack state machine.
+
+`timingMatching` is the way out of that when they cannot:
+
+  - TIMING_MATCHING.None (default) - the above. The variants are authored on the parent's times.
+  - TIMING_MATCHING.ToOverride - the parent is re-timed to the variant instead. Each section the
+    engine plays has the parent's speed scaled by (parent section length / variant section length),
+    so the section takes exactly as long as the variant's own, at the speed the engine asked for.
+    The variant keeps its authored pace, and the parent's section keys - "max attack", "hit" and
+    the follow-through ends, still the ones the engine acts on - land on the variant's own.
+
+    That makes animations built for another weapon usable as they are: a set cut from the
+    hand-to-hand animations can be registered over `weapononehand` without being re-timed to it.
+    Both groups must carry the same key *names*; only their times may differ. Nothing is measured
+    per frame - the four key lookups happen once per section.
 ]]
 local attackVariantsRegistrations = 0
+
+--- Timing matching --------------------
+-----------------------------------------
+-- Normally a variant has to be authored on the parent's key times, because the parent keeps playing
+-- underneath and its keys are what the engine hits on. TIMING_MATCHING.ToOverride turns that around:
+-- the variant keeps its own times and the parent is stretched or squeezed to fit, one section at a
+-- time.
+--
+-- The engine plays an attack as three sections, each its own playBlended with a start and stop key
+-- ("slash start" -> "slash max attack", "slash max attack" -> "slash hit", "slash large follow
+-- start" -> "slash large follow stop"). Both groups carry the same key names at different times, so
+-- for each section:
+--
+--     wanted wall time = override section length / requested speed
+--     parent speed     = parent section length / wanted wall time
+--                      = requested speed * parent section / override section
+--
+-- The override then plays at the speed the engine asked for - the weapon's own speed multiplier -
+-- and every section boundary key of the parent lands on the override's own. Keys inside a section
+-- are stretched with it, so they keep the parent's proportions rather than moving to the override's
+-- times: "min attack", where the engine starts counting the wind up's strength, and "min hit", which
+-- decides how much of the release a weak attack skips (character.cpp calculateWindUp, and the
+-- AttackRelease branch). startPoint needs no adjustment: it is a fraction of the section, so it
+-- means the same thing in both.
+--
+-- Two text key lookups per group per section, so four per section and twelve per attack. Nothing
+-- per frame.
+local function retimeParentToOverride(parent, groupname, pOptions)
+    local startKey = pOptions.startKey or pOptions.startkey
+    local stopKey = pOptions.stopKey or pOptions.stopkey
+    if not startKey or not stopKey then return end
+
+    local parentStart = animation.getTextKeyTime(omwself, parent .. ": " .. startKey)
+    local parentStop = animation.getTextKeyTime(omwself, parent .. ": " .. stopKey)
+    local overrideStart = animation.getTextKeyTime(omwself, groupname .. ": " .. startKey)
+    local overrideStop = animation.getTextKeyTime(omwself, groupname .. ": " .. stopKey)
+    if not (parentStart and parentStop and overrideStart and overrideStop) then return end
+
+    local parentLength = parentStop - parentStart
+    local overrideLength = overrideStop - overrideStart
+    -- A zero-length section (some follow-through sections are a single instant) has no timing to
+    -- match, and a negative one means the keys were resolved out of order - leave the speed alone.
+    if parentLength <= 0 or overrideLength <= 0 then return end
+
+    pOptions.speed = (pOptions.speed or 1) * (parentLength / overrideLength)
+end
 
 local function addAttackVariants(params)
     if not params.parentAttackGroupname or not params.attacks then
@@ -531,6 +658,12 @@ local function addAttackVariants(params)
     end
 
     local parent = params.parentAttackGroupname
+    local timingMatching = params.timingMatching or gutils.TIMING_MATCHING.None
+    if timingMatching ~= gutils.TIMING_MATCHING.None and timingMatching ~= gutils.TIMING_MATCHING.ToOverride then
+        error("addAttackVariants(): unknown timing matching mode '" .. tostring(timingMatching) .. "'.")
+        return
+    end
+
     local subAttackMode = params.subAttackMode or gutils.SUB_ATTACK_MODE.Random
     if subAttackMode ~= gutils.SUB_ATTACK_MODE.Random and subAttackMode ~= gutils.SUB_ATTACK_MODE.RoundRobin then
         error("addAttackVariants(): unknown sub attack mode '" .. tostring(subAttackMode) .. "'.")
@@ -586,6 +719,9 @@ local function addAttackVariants(params)
         stepStates = stepStates,
         lastAttackEndTime = {},
         subAttackMode = subAttackMode,
+        timingMatching = timingMatching,
+        -- Attack sets on one parent are always alternatives to each other, so they are always ranked.
+        overridePriority = params.overridePriority or 0,
         randomMaxRepeats = params.randomMaxRepeats or 3,
         sequenceResetTime = params.sequenceResetTime or 3,
         preOverride = function(self, pOptions)
@@ -663,6 +799,8 @@ local function addAttackVariants(params)
             return true
         end,
         options = function(self, pOptions)
+            -- The clone is taken first, so the override keeps the speed the engine asked for while
+            -- the parent below gets re-timed to it.
             local opts = gutils.cloneAnimOptions(pOptions)
 
             -- Since the engine never runs 2 animations with exact same priorities - it's important to make parent animation priority unique to ensure that it will remain running in the background.
@@ -671,6 +809,10 @@ local function addAttackVariants(params)
 
             pOptions.blendMask = 0
             pOptions.blendmask = 0
+
+            if self.timingMatching == gutils.TIMING_MATCHING.ToOverride then
+                retimeParentToOverride(self.parent, self.groupname, pOptions)
+            end
 
             return opts
         end,
@@ -709,6 +851,7 @@ local function addAltAttackAnimations(params)
         parentAttackGroupname = params.parentAttackGroupname,
         armatureType = params.armatureType,
         stance = params.stance,
+        overridePriority = params.overridePriority,
         attacks = attacks
     })
 end
@@ -818,14 +961,24 @@ I.AnimationController.addPlayBlendedAnimationHandler(function(groupname, options
 
     -- print("Found " .. #anims .. " override(s) for " .. groupname)
 
-    -- Starting override anims
+    -- Starting override anims. Ranked ones come highest first, and the first to pass takes this play:
+    -- lower-ranked ones after it are not asked (see Override ranking).
+    local claimedRank = nil
     for _, anim in ipairs(anims) do  
         anim.parentOptions = gutils.cloneAnimOptions(options)
+        local rank = anim.overridePriority
 
         -- print("Anim starts on anim event: " .. tostring(anim.startOnAnimEvent) .. ", proper armature type: " .. tostring(isProperArmatureType(anim)) .. ", proper stance: " .. tostring(isProperStance(anim)))
-        if anim.startOnAnimEvent and animation.hasGroup(omwself, anim.groupname) and isProperArmatureType(anim) and isProperStance(anim) then
+        if claimedRank and rank and rank < claimedRank then
+            -- Outranked for this play. isParentHidden() reads enabled, and a stale true would
+            -- suppress the parent's tail. A running one is stopped by onUpdate.
+            if anim.hidesParent then anim.enabled = false end
+        elseif anim.startOnAnimEvent and animation.hasGroup(omwself, anim.groupname) and isProperArmatureType(anim) and isProperStance(anim) then
             local shouldStart = anim:condition()
             if shouldStart then
+                -- Taken even when it ends up playing nothing of its own: an attack set that picked
+                -- the vanilla animation still owns this attack.
+                if rank then claimedRank = rank end
                 -- End this override's groupname and run pre-override pass. 
                 -- Reminder: pre-override pass is there to allow for dynamic anim.groupname changes, i.e
                 -- it should be supported for anim.preOverride to change its own anim.groupname.  
@@ -880,8 +1033,9 @@ local function onUpdate(dt)
 
             if not isPlaying then anim.running = false end
 
-            shouldStop = isPlaying and
-                ((anim.stopCondition and anim:stopCondition()) or (anim.parent and not isParentPlaying))
+            -- An outranked one stops without its stopCondition being asked (see Override ranking).
+            shouldStop = isPlaying and ((anim.overridePriority and isOutranked(anim)) or
+                (anim.stopCondition and anim:stopCondition()) or (anim.parent and not isParentPlaying))
         end
 
         -- Should we start a non-running tracked animation?
@@ -889,7 +1043,9 @@ local function onUpdate(dt)
             if anim.parent and isParentPlaying == nil then isParentPlaying = animManager.isPlaying(anim.parent) end
 
             --print("Checking " .. anim.groupname .. " start conditions on update. Parent: " .. tostring(anim.parent) .. ", isParentPlaying: " .. tostring(isParentPlaying) .. ", condition: " .. tostring(anim:condition()) .. ", hasGroup: " .. tostring(animation.hasGroup(omwself, anim.groupname)))
-            shouldStart = (not anim.parent or isParentPlaying) and anim:condition() and animation.hasGroup(omwself, anim.groupname)
+            -- A ranked one is not asked while a higher one on its parent runs (see Override ranking).
+            shouldStart = (not anim.parent or isParentPlaying) and not (anim.overridePriority and isOutranked(anim)) and
+                anim:condition() and animation.hasGroup(omwself, anim.groupname)
         end
 
         -- Starting and stopping animations
@@ -922,10 +1078,11 @@ end
 return {
     interfaceName = "ReAnimation",
     interface = {
-        version = 3.1,
+        version = 3.2,
         ARMATURE_TYPE = gutils.ARMATURE_TYPE,
         STANCE = gutils.STANCE,
         SUB_ATTACK_MODE = gutils.SUB_ATTACK_MODE,
+        TIMING_MATCHING = gutils.TIMING_MATCHING,
         addAnimationOverride = addAnimationOverride,        
         addAltAttackAnimations = addAltAttackAnimations,
         addAttackVariants = addAttackVariants,

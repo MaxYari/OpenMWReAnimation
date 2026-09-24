@@ -644,6 +644,20 @@ local SUB_ATTACK_MODE = {
 }
 module.SUB_ATTACK_MODE = SUB_ATTACK_MODE
 
+-- How an override's text key timings are reconciled with its parent's.
+local TIMING_MATCHING = {
+    -- Nothing is done. The override's key times must already match its parent's, which is what
+    -- keeps the engine's hit timing and the animation on screen in step.
+    None = "None",
+    -- The parent is re-timed to the override instead. Each section the engine plays (wind up,
+    -- release, follow through) has the parent's speed scaled so that section takes exactly as long
+    -- as the same section of the override would at the speed the engine asked for. The override
+    -- then plays at its own authored pace and the parent's section keys - which still drive the
+    -- hit - land on its own. See addAttackVariants().
+    ToOverride = "toOverride"
+}
+module.TIMING_MATCHING = TIMING_MATCHING
+
 local function getArmatureType()
     if not camStatus then return ARMATURE_TYPE.ThirdPerson end
     local mode = camera.getMode()

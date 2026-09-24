@@ -2,17 +2,17 @@ name: Release to Nexus Mods
 
 # Every push to main packs the mod and uploads it as a new version of the main file on the
 # Nexus page below, with the last commit message as its changelog and no file description.
-# Put [skip ci] in a commit message to push without uploading.
+# Put [skip nexus] in a commit message to push without uploading.
 #
 # The version is the first `version = ...` in VERSION_SOURCE. If Nexus already has it (you didn't
-# bump it), a counter is appended: 2.9 -> 2.9.1 -> 2.9.2 ... until you bump it.
+# bump it), a counter is appended on Nexus only: 3.1 -> 3.1.1 -> 3.1.2 ... until you bump it.
 #
 # The Nexus API can't edit the mod page description. README.nexus.bbcode (kept in sync by the
 # .githooks/pre-commit hook) has it ready to paste; every run also puts a copy with image links
 # pinned to that commit in the job summary.
 #
 # Can also be run by hand: Actions tab -> Release to Nexus Mods -> Run workflow, or
-#   gh workflow run nexus-release.yml [-f version=3.0] [-f changelog="..."]
+#   gh workflow run nexus-release.yml [-f version=3.2] [-f changelog="..."]
 #
 # One-time setup: repo Settings -> Secrets and variables -> Actions -> New repository secret
 #   NEXUSMODS_API_KEY = the "Personal API Key" from https://www.nexusmods.com/settings/api-keys
@@ -47,6 +47,8 @@ env:
 
 jobs:
   nexus:
+    # Manual runs have no head commit, so they always upload
+    if: ${{ !contains(github.event.head_commit.message, '[skip nexus]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -648,9 +648,9 @@ I.ReAnimation.addAltAttackAnimations({
 -- random between the vanilla animation and a substitute one.
 --
 -- Katanas share the weapontwohand animation group with claymores but want their own chops, so the
--- set is registered twice under mutually exclusive conditions. Each keeps its own alternation
--- counters, so swapping weapons mid-fight resumes each sequence where it left off rather than
--- restarting it.
+-- set is registered twice: the katana one a rank above the general one, which stands down whenever
+-- a katana is in hand. Each keeps its own alternation counters, so swapping weapons mid-fight
+-- resumes each sequence where it left off rather than restarting it.
 --
 -- What we actually want is "is this weapon built on a katana mesh", which no single name fragment
 -- expresses: the scythes are enchanted dai-katanas, and Gravedigger, Bloodrust and Raphalas' Sword
@@ -664,6 +664,7 @@ I.ReAnimation.addAttackVariants({
     id = "TwoHandKatana",
     parentAttackGroupname = "weapontwohand",
     armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
+    overridePriority = 1,
     condition = isKatana,
     attacks = {
         chop   = { { "weapontwohandktn" }, { "weapontwohandktnalt" } },
@@ -676,7 +677,6 @@ I.ReAnimation.addAttackVariants({
     id = "TwoHand",
     parentAttackGroupname = "weapontwohand",
     armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
-    condition = function() return not isKatana() end,
     attacks = {
         chop   = { { "weapontwohand", "weapontwohandsub" }, { "weapontwohandalt" } },
         slash  = { { "weapontwohand" }, { "weapontwohandalt" } },
@@ -705,8 +705,8 @@ I.ReAnimation.addAttackVariants({
     }
 })
 -- Throwing stars are thrown quite differently from knives and darts, so they get their own pair of
--- groups. Same two-registration pattern as the katanas above: mutually exclusive conditions on one
--- parent group.
+-- groups. Same two-registration pattern as the katanas above: the star set ranked above the general
+-- one on the same parent group.
 -- Throwing stars get their own idle, locomotion, jump and equip too. The jump and the equip hide
 -- their parent the way alt attacks do (uniquified priority + blendMask 0): they only ever stop
 -- together with it, so it never has to come back.
@@ -745,15 +745,19 @@ end
 -- Sneaking is a second override on the same parent rather than its own group, because first person
 -- has no "idlesneak" animation at all: refreshIdleAnims falls back to "idle" + weapon short group,
 -- so a sneaking thrown-weapon user is still playing idle1t. controls.sneak is the only way to tell,
--- which is exactly why idle1hsneak / idle1ssneak are built the same way. The two conditions are
--- mutually exclusive so only one ever plays. startOnUpdate on both, since toggling
--- sneak does not replay the idle.
+-- which is exactly why idle1hsneak / idle1ssneak are built the same way. startOnUpdate on both,
+-- since toggling sneak does not replay the idle.
+--
+-- The three idle1t idles are ranked, so only one ever plays: star sneak (2) over star (1) over the
+-- thrown sneak (0). Each condition is just what the idle is for, and the one on top wins. The shield
+-- corrections on idle1t are unranked layers, and play over whichever of them is up.
 addOverride({
     id = "ThrowStarIdle",
     parent = "idle1t",
     groupname = "idle1tstar",
     armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
-    condition = function() return isThrowingStar() and not controls.sneak end,
+    overridePriority = 1,
+    condition = isThrowingStar,
     stopCondition = function(self) return not self:condition() end,
     options = starOutrankOptions,
     startOnAnimEvent = true,
@@ -764,6 +768,7 @@ addOverride({
     parent = "idle1t",
     groupname = "idle1tstarsneak",
     armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
+    overridePriority = 2,
     condition = function() return isThrowingStar() and controls.sneak end,
     stopCondition = function(self) return not self:condition() end,
     options = starOutrankOptions,
@@ -772,15 +777,16 @@ addOverride({
 })
 
 -- Sneak idle for everything else in the thrown group (knives, darts, javelins, axes). Built like
--- idle1hsneak rather than the star pair: it only needs to outrank idle1t, not hide it. The not-star
--- condition keeps it from stacking on ThrowStarIdleSneak. Sneak locomotion needs no override -
+-- idle1hsneak rather than the star pair: it only needs to outrank idle1t, not hide it. Ranked below
+-- both star idles, so it stands down whenever a star is in hand. Sneak locomotion needs no override -
 -- sneakforward1t etc. in x1tSneakMovement play natively.
 addOverride({
     id = "ThrowIdleSneak",
     parent = "idle1t",
     groupname = "idle1tsneak",
     armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
-    condition = function() return controls.sneak and not isThrowingStar() end,
+    overridePriority = 0,
+    condition = function() return controls.sneak end,
     stopCondition = function(self) return not self:condition() end,
     options = function(self)
         local opts = cloneAnimOptions(self.parentOptions)
@@ -788,7 +794,7 @@ addOverride({
 
         -- The priority can arrive as a per-bone-group table rather than a number: any override
         -- that hides idle1t rewrites it into one (gutils.uniquifyPriority) before this one's
-        -- parentOptions clone is taken, since clones are made in registration order.
+        -- parentOptions clone is taken, since clones are made in the order overrides are asked.
         local p = opts.priority
         if type(p) == "number" then
             opts.priority = p + 1
@@ -941,6 +947,7 @@ I.ReAnimation.addAttackVariants({
     id = "ThrowStar",
     parentAttackGroupname = "throwweapon",
     armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
+    overridePriority = 1,
     condition = isThrowingStar,
     attacks = {
         -- "throwweaponaltstar", matching the group in xThrownStarThrowAlt.kf. A variant group that
@@ -954,7 +961,6 @@ I.ReAnimation.addAttackVariants({
     id = "Throw",
     parentAttackGroupname = "throwweapon",
     armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
-    condition = function() return not isThrowingStar() end,
     attacks = {
         shoot = { { "throwweapon" }, { "throwweaponalt" } }
     }
