@@ -1,4 +1,4 @@
-"""Post-export text key fixes for ReAnimation .kf files.
+"""Post-export fixes for ReAnimation .kf files: text keys, and where a file sits on the timeline.
 
 Run after every Blender export of an animation, see README.md next to this file for why:
 
@@ -98,8 +98,73 @@ def separate_follow_start(kf, epsilon):
     return moved
 
 
-OPS = {'separate-follow-start': separate_follow_start}
-DETECT = {'separate-follow-start': find_follow_starts}
+# align-time: moves the whole file - text keys, every track, and the controllers' start/stop - so
+# one text key lands on a given time. The animation itself is untouched; only where it sits on the
+# file's timeline changes. For thrown weapons that position is not neutral: OpenMW drives the held
+# weapon mesh's own controllers with the absolute time of the "throwweapon" group
+# (WeaponAnimationTime, character.cpp setWeaponGroup: relative time is for Ranged only). Meshes
+# that bake a flight spin into the model (Improved Weapon Mesh Compilation, 0..4 s) expect the
+# group where vanilla has it, 48.7 s on; at 0..1 s the knife jumps to its flight pose. Blender
+# exports every action from 0, hence a post-export step.
+
+def find_align_key(kf, key):
+    """Time of the text key line equal to `key` (case-insensitive), or None."""
+    want = key.strip().lower()
+    for tm, text in kf.text_keys():
+        for line in text.replace('\r', '').split('\n'):
+            if line.strip().lower() == want:
+                return tm
+    return None
+
+
+def shift_all(kf, offset):
+    def shifted(keys):
+        return [(k[0] + offset,) + tuple(k[1:]) for k in keys]
+    for t, p in kf.blocks:
+        if t == 'NiTextKeyExtraData':
+            p['keys'] = [(tm + offset, s) for tm, s in p['keys']]
+        elif t == 'NiKeyframeController':
+            p['start'] += offset
+            p['stop'] += offset
+        elif t == 'NiKeyframeData':
+            p.quat_keys = shifted(p.quat_keys)
+            for g in p.xyz or ():
+                g['keys'] = shifted(g['keys'])
+            p.trans['keys'] = shifted(p.trans['keys'])
+            p.scale['keys'] = shifted(p.scale['keys'])
+
+
+def find_misaligned(kf, align):
+    tm = find_align_key(kf, align['key'])
+    if tm is None:
+        raise ValueError(f'align-time: no text key "{align["key"]}"')
+    return [] if abs(tm - align['time']) < SAME_TIME else [(align['key'], tm)]
+
+
+def align_time(kf, align):
+    """Returns [(description, old time, new time)] of the anchor key, or [] if already aligned."""
+    found = find_misaligned(kf, align)
+    if not found:
+        return []
+    tm = found[0][1]
+    shift_all(kf, align['time'] - tm)
+    return [(f'{align["key"]} (whole file)', tm, align['time'])]
+
+
+# Each operation takes (kf, manifest entry, epsilon); detection takes (kf, manifest entry).
+OPS = {'separate-follow-start': lambda kf, entry, eps: separate_follow_start(kf, eps),
+       'align-time': lambda kf, entry, eps: align_time(kf, entry['align'])}
+DETECT = {'separate-follow-start': lambda kf, entry: find_follow_starts(kf),
+          'align-time': lambda kf, entry: find_misaligned(kf, entry['align'])}
+
+
+def entry_ops(entry):
+    """An entry names one operation ("op") or several ("ops"), applied in that order."""
+    return entry['ops'] if 'ops' in entry else [entry['op']]
+
+
+def pending_ops(kf, entry):
+    return [op for op in entry_ops(entry) if DETECT[op](kf, entry)]
 
 
 # ---- commands ----------------------------------------------------------------
@@ -125,10 +190,10 @@ def unlisted_candidates(man):
             kf = KF.load(os.path.join(REPO, rel))
             if kf.textkey_block is None:
                 continue
-            for op, detect in DETECT.items():
-                found = detect(kf)
-                if found:
-                    out.append((rel, op, sorted({ln for _, _, ln, _ in found})))
+            # align-time needs a target per file, so only the follow start fix can be guessed at.
+            found = find_follow_starts(kf)
+            if found:
+                out.append((rel, 'separate-follow-start', sorted({ln for _, _, ln, _ in found})))
     return out
 
 
@@ -141,14 +206,14 @@ def check(man):
             attention = True
             continue
         h = sha256(path)
-        pending = DETECT[entry['op']](KF.load(path))
+        pending = pending_ops(KF.load(path), entry)
         if h == entry.get('patched_sha256') and not pending:
             print(f'ok        {rel}  (patched {entry.get("patched_at")})')
         elif h == entry.get('source_sha256'):
             print(f'UNPATCHED {rel}  (same export as last time, patch not applied) -> run apply')
             attention = True
         elif pending:
-            print(f'CHANGED   {rel}  (new export, {len(pending)} key(s) to fix) -> run apply')
+            print(f'CHANGED   {rel}  (new export, needs {", ".join(pending)}) -> run apply')
             attention = True
         else:
             print(f'CHANGED   {rel}  (new export, nothing to fix any more) -> run apply to record it')
@@ -167,11 +232,15 @@ def apply(man):
     for rel, entry in man['files'].items():
         path = os.path.join(REPO, rel)
         h = sha256(path)
-        if h == entry.get('patched_sha256'):
+        kf = KF.load(path)
+        # The hash alone is not enough: an entry that gained an operation still matches the hash
+        # recorded under the old list.
+        if h == entry.get('patched_sha256') and not pending_ops(kf, entry):
             print(f'ok        {rel}  already patched')
             continue
-        kf = KF.load(path)
-        moved = OPS[entry['op']](kf, eps)
+        moved = []
+        for op in entry_ops(entry):
+            moved += OPS[op](kf, entry, eps)
         if moved:
             kf.save(path)
             entry['source_sha256'] = h

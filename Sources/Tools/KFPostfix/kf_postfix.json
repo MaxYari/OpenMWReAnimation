@@ -12,24 +12,31 @@
       "patched_at": "2026-09-15"
     },
     "Animations/xbase_anim.1st/xThrownKnifeThrow.kf": {
-      "op": "separate-follow-start",
-      "why": "Shoot Release and Shoot Follow Start share frame 10, so the release key fires twice",
-      "source_sha256": "190956bc6dce8cffa58da192bdbed32fef175134c577b083834ea43e5b8bd754",
-      "moved": [
-        "ThrowWeapon: Shoot Follow Start: 0.3333 -> 0.3343"
+      "ops": [
+        "separate-follow-start",
+        "align-time"
       ],
-      "patched_sha256": "4ae3e931268dd9719cc8c3f41f62acd62618d154ace3ba05e033a6617f4ad115",
-      "patched_at": "2026-09-15"
+      "align": {
+        "key": "ThrowWeapon: Shoot Start",
+        "time": 49.20000076293945
+      },
+      "why": "Shoot Release and Shoot Follow Start share frame 10, so the release key fires twice; throwweapon has to sit where vanilla has it: OpenMW runs a held thrown weapon's own mesh controllers on the group's absolute time, and meshes with a baked flight spin (Improved Weapon Mesh Compilation) show their flight pose at 0..4 s",
+      "source_sha256": "77b98fcd4634c3dfbcd85b4476610b75519291437fe4c772be875cb23c1e4c2a",
+      "moved": [
+        "ThrowWeapon: Shoot Start (whole file): 0.0000 -> 49.2000"
+      ],
+      "patched_sha256": "d270643cb2c1cf9a0aee9c7355dfd6602adf90ba16cca33a0c4b192246560754",
+      "patched_at": "2026-09-26"
     },
     "Animations/xbase_anim.1st/xThrownKnifeThrowAlt.kf": {
       "op": "separate-follow-start",
       "why": "Shoot Release and Shoot Follow Start share frame 10, so the release key fires twice",
-      "source_sha256": "81bb5e065dcdc65d894512e37bef6e1c1f5d9e36b2960669ba988b7824719eb4",
+      "source_sha256": "84d6c819c49d071874a4d8e4e07a19d0e704535463872e0cc0d6a30583a75227",
       "moved": [
         "ThrowWeaponAlt: Shoot Follow Start: 0.3333 -> 0.3343"
       ],
-      "patched_sha256": "dd738a2a20570d92314dc00cc3fdde3f7249d48a50e6786582fbb8a6297f7f8e",
-      "patched_at": "2026-09-15"
+      "patched_sha256": "9aea3f23ff384397621fc35e5554209f9882dc5ded5238b907a4512d4468f011",
+      "patched_at": "2026-09-26"
     },
     "Animations/xbase_anim.1st/xThrownStarThrow.kf": {
       "op": "separate-follow-start",
@@ -50,6 +57,22 @@
       ],
       "patched_sha256": "a6d377b53bbee7b1f97fc86ae1eb7adcca576e0f4e773c53fd0041872ecd4726",
       "patched_at": "2026-09-15"
+    },
+    "Animations/xbase_anim.1st/xThrownKnifeEqUneq.kf": {
+      "ops": [
+        "align-time"
+      ],
+      "align": {
+        "key": "ThrowWeapon: Equip Start",
+        "time": 48.733333587646484
+      },
+      "why": "Throwweapon has to sit where vanilla has it: OpenMW runs a held thrown weapon's own mesh controllers on the group's absolute time, and meshes with a baked flight spin (Improved Weapon Mesh Compilation) show their flight pose at 0..4 s",
+      "source_sha256": "83894f95110c54212e09ab47e07c31b874d2f8fb7d7e1c6720d6fe7053fe9855",
+      "moved": [
+        "ThrowWeapon: Equip Start (whole file): 0.0000 -> 48.7333"
+      ],
+      "patched_sha256": "3123eda56ebab06e09fb721b83c52394ab3b7d92df7f0b5d951edde0f3a6a194",
+      "patched_at": "2026-09-26"
     }
   }
 }

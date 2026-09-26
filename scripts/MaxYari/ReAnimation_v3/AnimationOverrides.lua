@@ -194,7 +194,7 @@ local function thrownShieldOptions(self, pOptions)
 end
 
 
-local KATANA_ID_TERMS ={ "katana", "scythe", "gravedigger", "bloodrust" }
+local KATANA_ID_TERMS ={ "katana", "scythe", "gravedigger", "bloodrust", "lightsaber" }
 
 -- Throwing stars, as opposed to the knives, darts, javelins and axes that share the throwweapon
 -- group. A single term is enough here: every star in Morrowind + Tribunal + Bloodmoon (15 of 15)
@@ -248,7 +248,12 @@ local function hasShieldEquipped()
     return cached
 end
 
--- Weapon type of the right hand, by id like the rest. nil with nothing in it.
+-- Weapon type of the right hand, cached by id like the rest. nil with nothing in it.
+--
+-- The record comes from the item, not the id: the API's id is lowercased, and a generated record's -
+-- anything an enchanter made, a bound weapon another mod scaled - only resolves in its own case,
+-- "Generated:0x..." (ESM::RefId::deserializeText). Looked up by the lowercased one, an enchanted
+-- dagger had no type, and no torch correction.
 local weaponTypeByItemId = {}
 
 local function equippedWeaponType()
@@ -257,7 +262,8 @@ local function equippedWeaponType()
 
     local weaponType = weaponTypeByItemId[id]
     if weaponType == nil then
-        local record = types.Weapon.record(id)
+        local item = I.ReAnimation.getEquippedWeapon()
+        local record = item and types.Weapon.objectIsInstance(item) and types.Weapon.record(item)
         weaponType = record and record.type or false
         weaponTypeByItemId[id] = weaponType
     end

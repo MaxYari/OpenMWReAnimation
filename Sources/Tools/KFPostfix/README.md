@@ -46,3 +46,19 @@ out that way (release and follow start 2 frames apart).
 Melee attacks in many ReAnimation sets put `<attack> hit` on the same frame as their
 `small/medium/large follow start` too. `check` lists them as `UNLISTED`. As of 2026-09-15 they
 aren't patched; that's still the user's call.
+
+## Operation: `align-time`
+
+Moves the whole file (text keys, every track, the controllers' start/stop) so that the key named
+in the entry's `align.key` lands on `align.time`. The animation itself doesn't change, only where
+it sits on the file's timeline. An entry can list several operations under `ops`; they run in order.
+
+It exists for the thrown weapon group. OpenMW drives the held weapon mesh's own controllers with
+the absolute time of the `throwweapon` group (`WeaponAnimationTime`; only bows and crossbows get a
+time relative to the group's start, `character.cpp`, `setWeaponGroup`). Replacers that bake a flight
+spin into the model, like Improved Weapon Mesh Compilation (0 to 4 s), are built for vanilla's
+layout, where the group starts at 48.7 s. Blender exports every action from 0 s, and at 0 to 1 s
+the knife jumps to its flight pose during every throw and equip. So the two files that define
+`throwweapon` are moved onto vanilla's times: `xThrownKnifeThrow.kf` by its `Shoot Start` (49.2 s)
+and `xThrownKnifeEqUneq.kf` by its `Equip Start` (48.733 s). The alternate and star groups don't
+need it: they play over the hidden `throwweapon` parent, whose clock is the one the mesh follows.
