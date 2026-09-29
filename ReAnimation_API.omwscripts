@@ -1,1 +1,4 @@
-PLAYER NPC: scripts/MaxYari/ReAnimation_v3/ReAnimationAPI.lua
+# On creatures too, but only a two-legged one that fights with weapons (dremora, golden saints,
+# liches, skeletons) keeps it: they play the NPC animations, so a moveset can override theirs as well.
+# On any other creature the script returns as it loads, with no handlers and no interface.
+PLAYER NPC CREATURE: scripts/MaxYari/ReAnimation_v3/ReAnimationAPI.lua

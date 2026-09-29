@@ -2,6 +2,16 @@ local mp = "scripts/MaxYari/ReAnimation_v3/"
 
 local omwself = require('openmw.self')
 local types = require('openmw.types')
+
+-- Creatures: a two-legged one that fights with weapons plays the NPC animations (CreatureAnimation
+-- loads xbase_anim and its animation folder for a biped), so an override can replace them there as on
+-- an NPC. Any other has nothing to override: this returns before loading anything else, with no
+-- handlers and no interface, so it costs nothing per frame.
+if types.Creature.objectIsInstance(omwself) then
+    local record = types.Creature.record(omwself)
+    if not (record.isBiped and record.canUseWeapons) then return end
+end
+
 local core = require("openmw.core")
 
 local animation = require('openmw.animation')
