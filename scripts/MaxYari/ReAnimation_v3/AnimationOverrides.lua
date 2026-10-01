@@ -1,6 +1,7 @@
 local mp = "scripts/MaxYari/ReAnimation_v3/"
 
 local omwself = require('openmw.self')
+local core = require('openmw.core')
 local types = require('openmw.types')
 local animation = require('openmw.animation')
 local vfs = require('openmw.vfs')
@@ -19,7 +20,7 @@ local selfActor = gutils.Actor:new(omwself)
 local controls = omwself.controls
 
 -- Max Yari's Script Services (MSS) is a required dependency: checked once, when this script loads.
-if not require('openmw.core').contentFiles.has("MaxYariScriptServices.omwscripts") then
+if not core.contentFiles.has("MaxYariScriptServices.omwscripts") then
     print("[ReAnimation] ERROR: critical dependency is missing: Max Yari's Script Services (MSS). Please install it.")
     require('openmw.ui').showMessage("ReAnimation: Critical dependency is missing, please install Max Yari's Script Services (MSS)")
 end
@@ -117,6 +118,31 @@ local function isAnyPlaying(groups)
         if animManager.isPlaying(groups[i]) then return true end
     end
     return false
+end
+
+-- The v3 bounce keys no root (Bip01), and the 1st person hit1 and hit2 swing it sideways, hit2 by
+-- up to 66 degrees. A hit takes the lower body from the bounce (it ties with the bounce's Movement + 1
+-- there and wins by name), and when it hands the lower body back nothing drives the root any more:
+-- the engine only updates the bones the top state keys (animation.cpp resetActiveGroups), so the
+-- whole view model stays turned wherever the hit left it. That is anywhere along the swing when the
+-- hit is cut short, which the engine does at the end of an attack (character.cpp:1831).
+-- So the v3 bounce stands down while a hit plays and for a moment after, long enough for the
+-- movement group under it, which does key the root, to blend it home. That blend is the global
+-- config's generic rule, 0.25 s sineOut, since no rule there names the hit groups.
+-- The end is stamped from animationEnded, which fires on every way a state goes - played out,
+-- disabled or evicted by the next hit - and is delivered before onUpdate, where the bounce is polled.
+local HIT_GROUPS = { "hit1", "hit2", "hit3", "hit4", "hit5" }
+local IS_HIT_GROUP = { hit1 = true, hit2 = true, hit3 = true, hit4 = true, hit5 = true }
+local HIT_ROOT_SETTLE_TIME = 0.3
+local lastHitEndedAt = nil
+
+I.AnimationController.addAnimationEndedHandler(function(groupname)
+    if IS_HIT_GROUP[groupname] then lastHitEndedAt = core.getSimulationTime() end
+end)
+
+local function hitHoldsRoot()
+    if isAnyPlaying(HIT_GROUPS) then return true end
+    return lastHitEndedAt ~= nil and core.getSimulationTime() - lastHitEndedAt < HIT_ROOT_SETTLE_TIME
 end
 
 -- runbounce has no parent group to copy a speed from, so it computes the one the engine gives a
@@ -515,11 +541,12 @@ local animations = {
         parent = nil,
         -- The Reanimation v3 bounce: the v2 one holds the v2 pelvis (5.55 deg off v3), which swings
         -- the whole torso and weapon aside on v3 poses. This one keys only the v3 pelvis and the
-        -- spine bob.
+        -- spine bob, which is why it stands down around hits (see hitHoldsRoot).
         groupname = "runbouncev3",
         armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
         condition = function()
-            return not FBA_COMPAT and isAnyPlaying(BOUNCE_V3_ATTACK_GROUPS) and selfActor:getCurrentSpeed() > 1
+            return not FBA_COMPAT and isAnyPlaying(BOUNCE_V3_ATTACK_GROUPS) and not hitHoldsRoot()
+                and selfActor:getCurrentSpeed() > 1
         end,
         stopCondition = function(self)
             return not self:condition()
