@@ -1018,11 +1018,84 @@ end)
 
 
 
+--- After a load ----------------------------------
+---------------------------------------------------
+-- The engine plays an actor's animations past Lua until the AnimationController's first update turns
+-- Lua on for it (omw/mechanics/animationcontroller.lua, _enableLuaAnimations). So whatever the actor
+-- was loaded with, or came into the world with - its idle, a walk - started unseen: no override has its
+-- parent's options, and nothing had this script look at the actor's stance and view, which decide
+-- what is tracked at all. An override then waited for the engine to play its parent again, and an idle
+-- can play on for a long while. So once, on the first update after the actor comes into the world, the
+-- stance and view are looked at, and an override whose parent is already playing unseen is given the
+-- options the engine plays that kind of group with. Started on update, it starts from there.
+
+-- The engine's own idles and movement, as it plays them (CharacterController::refreshIdleAnims,
+-- refreshMovementAnims, getIdlePriority). Anything else - an attack, a hit, a jump - is over soon, and
+-- the next one is seen.
+local P = animation.PRIORITY
+local BG = animation.BONE_GROUP
+local ENGINE_PRIORITIES = {
+    { "^idlesneak", { [BG.LowerBody] = P.SneakIdleLowerBody, [BG.Torso] = P.Default,
+                      [BG.LeftArm] = P.Default, [BG.RightArm] = P.Default } },
+    { "^idleswim", P.SwimIdle },
+    { "^idle", P.Default },
+    { "^walk", P.Movement },
+    { "^run", P.Movement },
+    { "^sneak", P.Movement },
+    { "^swim", P.Movement },
+    { "^turn", P.Movement },
+}
+
+local function engineOptions(groupname)
+    for i = 1, #ENGINE_PRIORITIES do
+        local rule = ENGINE_PRIORITIES[i]
+        if string.find(groupname, rule[1]) then
+            return {
+                priority = rule[2],
+                blendMask = animation.BLEND_MASK.All,
+                autoDisable = false,
+                speed = animation.getSpeed(omwself, groupname) or 1,
+                startKey = "start",
+                stopKey = "stop",
+                startPoint = animation.getCompletion(omwself, groupname) or 0,
+                loops = animation.getLoopCount(omwself, groupname) or 0,
+                forceLoop = true,
+            }
+        end
+    end
+    return nil
+end
+
+local settlePending = true
+
+local function settle()
+    -- A model come into the world is a new one: nothing remembered about it holds.
+    animManager.resetPlayingState()
+    checkActorStates()
+    local optionsOf = {}
+    for i = 1, trackedAnims_n do
+        local anim = trackedAnims[i]
+        local parent = anim.parent
+        if parent and anim.parentOptions == nil then
+            local opts = optionsOf[parent]
+            if opts == nil then
+                opts = animManager.isPlaying(parent) and engineOptions(parent) or false
+                optionsOf[parent] = opts
+            end
+            if opts then anim.parentOptions = gutils.cloneAnimOptions(opts) end
+        end
+    end
+end
+
 local function onUpdate(dt)
     if not trackedAnims_n or dt <= 0 then return end
     --print("onUpdate called. dt: " .. tostring(dt) .. ", trackedAnims_n: " .. tostring(trackedAnims_n))
     
     frame_n = frame_n + 1    
+    if settlePending then
+        settlePending = false
+        settle()
+    end
     if trackedAnims_n <= 0 then return end   
 
     for i = trackedAnims_n, 1, -1 do
@@ -1088,7 +1161,7 @@ end
 return {
     interfaceName = "ReAnimation",
     interface = {
-        version = 3.2,
+        version = 3.3,
         ARMATURE_TYPE = gutils.ARMATURE_TYPE,
         STANCE = gutils.STANCE,
         SUB_ATTACK_MODE = gutils.SUB_ATTACK_MODE,
@@ -1114,5 +1187,6 @@ return {
     },
     engineHandlers = {
         onUpdate = onUpdate,
+        onActive = function() settlePending = true end,
     }
 }
