@@ -13,11 +13,13 @@ defaults are used.
 
 Usage: python3 build_compat.py [-y] [-v] [--fba DIR] [--anims DIR] [--out DIR] [--lean DEG]
                                [--hip-motion 0..1] [--sway 0..1] [--idle-when-feet-lift y/n]
+                               [--strafing-speed-fix y/n] [--alias PATTERN=NAME ...]
 See README.md next to this file.
 """
 import argparse
 import math
 import os
+import re
 import sys
 
 import fba_merge
@@ -28,10 +30,10 @@ from params import ask, yes_no
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MOD = os.path.normpath(os.path.join(HERE, '..', '..', '..'))
-# Defaults: this mod's animations, the compatibility folder next to it in the mods folder, FBA as
-# installed here.
-SRC = os.path.join(MOD, 'Animations', 'xbase_anim.1st')
-OUT = os.path.join(os.path.dirname(MOD), 'ReAnimation FBA Compatibility', 'Animations', 'xbase_anim.1st')
+# Defaults: this mod's animations ("00 Core"), its FBA Compatibility patch beside them ("01 FBA
+# Compatibility", one of the installer's options), FBA as installed here.
+SRC = os.path.join(MOD, '00 Core', 'Animations', 'xbase_anim.1st')
+OUT = os.path.join(MOD, '01 FBA Compatibility', 'Animations', 'xbase_anim.1st')
 ALL_KFS = sorted(n for n in os.listdir(SRC) if n.lower().endswith('.kf'))
 REFERENCE = 'x2cIdle.kf'  # check_all's rig pose; builds pick one themselves (find_reference)
 
@@ -48,12 +50,15 @@ def find_file(folder, name):
 
 
 def find_reference(folder, names):
-    """The rig's pose for bones a kf does not key: the first kf keying the whole spine and legs."""
-    for name in names:
-        kf = nifkf.KF.load(os.path.join(folder, name))
-        if all(b in kf.bone_data and kf.data(b).trans['keys'] and (kf.data(b).quat_keys or kf.data(b).xyz)
-               for b in REFERENCE_BONES):
-            return name, kf
+    """The rig's pose for bones a kf does not key: the first kf keying the whole spine and legs - in
+    the set being converted, or else in ReAnimation's own, which is on the same 1st-person skeleton
+    (MAGIC's spell animations key everything but Bip01)."""
+    for where, candidates in ((folder, names), (SRC, ALL_KFS)):
+        for name in candidates:
+            kf = nifkf.KF.load(os.path.join(where, name))
+            if all(b in kf.bone_data and kf.data(b).trans['keys'] and (kf.data(b).quat_keys or kf.data(b).xyz)
+                   for b in REFERENCE_BONES):
+                return (name if where == folder else "ReAnimation's " + name), kf
     sys.exit('No kf in %s keys the whole spine and legs - is that an Animations/xbase_anim.1st folder?' % folder)
 
 
@@ -61,11 +66,24 @@ LEAN = 15.0
 HIP_MOTION = 0.5
 SWAY = 0.33
 IDLE_WHEN_FEET_LIFT = True
+STRAFING_SPEED_FIX = True
+
+
+def alias(text):
+    """PATTERN=NAME for --alias: a regular expression on our group names and what it becomes."""
+    pattern, sep, name = text.partition('=')
+    if not sep or not pattern:
+        raise argparse.ArgumentTypeError('expected PATTERN=NAME, got %r' % text)
+    try:
+        re.compile(pattern)
+    except re.error as e:
+        raise argparse.ArgumentTypeError('%r: %s' % (pattern, e))
+    return pattern, name
 
 
 def parameters():
     p = argparse.ArgumentParser(
-        description='Builds the ReAnimation FBA Compatibility folder. Settings not given here are asked '
+        description='Builds the FBA Compatibility patch (01 FBA Compatibility). Settings not given here are asked '
                     'for, with the default filled in (Enter keeps it).')
     p.add_argument('-y', '--yes', action='store_true', help='use the defaults for everything not given, no questions')
     p.add_argument('-v', '--verbose', action='store_true', help='print per-group detail while building')
@@ -77,11 +95,17 @@ def parameters():
     p.add_argument('--sway', metavar='0..1', help='share of the walk/run hip swing kept (default %g)' % SWAY)
     p.add_argument('--idle-when-feet-lift', metavar='y/n',
                    help='idle legs where FBA lifts both feet (default %s)' % ('y' if IDLE_WHEN_FEET_LIFT else 'n'))
+    p.add_argument('--strafing-speed-fix', metavar='y/n',
+                   help='half-speed 1st-person part on quick-stepping strafes (default %s)'
+                        % ('y' if STRAFING_SPEED_FIX else 'n'))
+    p.add_argument('--alias', metavar='PATTERN=NAME', type=alias, action='append', default=[],
+                   help='rename our groups before finding their 3rd-person legs, e.g. "katar=hh" '
+                        '(regular expression, repeatable, applied in order)')
     a = p.parse_args()
     params.USE_DEFAULTS = a.yes
     fba_merge.VERBOSE = a.verbose
     fba = ask(a.fba, 'FBA folder', 'The one with meshes/xbase_anim.1st.kf.', params.find_fba(), str)
-    anims = ask(a.anims, 'Animations to convert', "ReAnimation's Animations/xbase_anim.1st folder.", SRC, str)
+    anims = ask(a.anims, 'Animations to convert', "ReAnimation's 00 Core/Animations/xbase_anim.1st folder.", SRC, str)
     out = ask(a.out, 'Output folder', 'Load its data folder after ReAnimation and FBA.', OUT, str)
     lean = ask(a.lean, 'Chest lean (degrees)',
                "Leans the chest forward so it doesn't fill the view when looking down.", LEAN, float)
@@ -92,14 +116,20 @@ def parameters():
                'Share of the walk/run hip swing passed to the upper body.', SWAY, float)
     idle = ask(a.idle_when_feet_lift, 'Idle legs where FBA lifts both feet (y/n)',
                'Keeps the crossbow reload from becoming a mid-air squat.', IDLE_WHEN_FEET_LIFT, yes_no)
+    strafe = ask(a.strafing_speed_fix, 'Strafing animation speed fix (y/n)',
+                 "Leaves the 3rd-person strafe alone. Those step quickly (FBA's run strafes take half the "
+                 "stride of its forward run, so the game plays them twice as fast), and the 1st-person "
+                 "part swung along at the same pace; this makes it swing half as often - one 1st-person "
+                 "step to two of the legs' - wherever a strafe's stride is 2/3 of the forward one or less. "
+                 "The footstep sounds stay on the legs' steps.", STRAFING_SPEED_FIX, yes_no)
     for name, value in (('hip motion', hip), ('spine swing', sway)):
         if not 0.0 <= value <= 1.0:
             sys.exit('%s must be between 0.0 and 1.0, got %s' % (name, value))
-    return fba, anims, out, lean, hip, sway, idle
+    return fba, anims, out, lean, hip, sway, idle, strafe, a.alias
 
 
 def main():
-    fba, anims, out, lean, hip, sway, idle = parameters()
+    fba, anims, out, lean, hip, sway, idle, strafe, aliases = parameters()
     third_person = find_file(fba, 'xbase_anim.1st.kf')
     if third_person is None:
         sys.exit('No xbase_anim.1st.kf under %s - is that the FBA folder?' % fba)
@@ -107,12 +137,16 @@ def main():
     fba_merge.HIP_MOTION = hip
     fba_merge.SWAY = sway
     fba_merge.IDLE_WHEN_FEET_LIFT = idle
+    fba_merge.STRAFE_SPEED_FIX = strafe
+    fba_merge.ALIASES = aliases
 
     names = sorted(n for n in os.listdir(anims) if n.lower().endswith('.kf'))
     os.makedirs(out, exist_ok=True)
     reference_name, reference = find_reference(anims, names)
-    print('\nrig pose from %s; lean %.1f deg, hip motion %.2f, spine swing %.2f, idle legs where feet lift: %s'
-          % (reference_name, lean, hip, sway, 'yes' if idle else 'no'))
+    print('\nrig pose from %s; lean %.1f deg, hip motion %.2f, spine swing %.2f, idle legs where feet lift: %s, '
+          'strafing speed fix: %s%s'
+          % (reference_name, lean, hip, sway, 'yes' if idle else 'no', 'yes' if strafe else 'no',
+             ''.join('; %s -> %s' % pair for pair in aliases)))
 
     merged = set()
     for i, name in enumerate(names, 1):

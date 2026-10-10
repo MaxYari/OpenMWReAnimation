@@ -51,6 +51,7 @@ That show _some_ of the animations. (Give them some time to load)
 
 2) Install this mod **With a mod organiser**: Download this repository as an archive and drag and drop it into your mod organiser of choice (e.g [Mod Organizer 2](https://github.com/ModOrganizer2/modorganizer/releases) on Windows or [Nerevarine Organizer](https://github.com/grazelandsnomad/nerevarine_organizer/releases/tag/v0.70) on Linux).  
 **Or**: [read this tutorial](https://modding-openmw.com/tips/installing-mods/) on how to install mods using the launcher or completely manually (it's also very easy). 
+The archive has a `00 Core` folder, which is the mod, and optional patches next to it: Full Body Awareness compatibility, and a fix for Improved Thrown Weapon Projectiles with its patches (see Mod compatibility below). Mod organisers show an installer that explains them. If you install by hand, add `00 Core` as the data folder, and the patches you want after it.
 
 3) Enable the mod's .omwscript files in "Content Files" tab of the OpenMW launcher ( `ReAnimation_API` and `ReAnimation_v3` at the time of writing). 
 
@@ -68,11 +69,11 @@ That show _some_ of the animations. (Give them some time to load)
 
 *NOTE #2*: OpenMW camera 1st person head-bob (the one that can be enabled in scripts in-game) may slightly conflict with the walk cycle animation, it's not too bad, but the mod was developed assuming that setting is turned off.
 
-*NOTE #3*: If you _only_ want to use ReAnimation as an API  for another mod (i.e only as a dependency that doesnt add any animations on its own) - only enable `ReAnimation_API` AND delete "Animations" folder from within this mod.
+*NOTE #3*: If you _only_ want to use ReAnimation as an API  for another mod (i.e only as a dependency that doesnt add any animations on its own) - only enable `ReAnimation_API` AND delete "Animations" folder from within this mod's `00 Core`.
 
 ## 𖤝 Mod suggestions
 
-[Full Body Awareness](https://www.nexusmods.com/morrowind/mods/56625) to see your own body in first person. Supported through two extra archives, see Mod compatibility below.
+[Full Body Awareness](https://www.nexusmods.com/morrowind/mods/56625) to see your own body in first person. Supported through an installer option (together with FBA's First Person Hands patch), see Mod compatibility below.
 
 [Dynamic Camera](https://www.nexusmods.com/morrowind/mods/55327) for more dynamic first person camera and visual effects. "Trust me bro" its not some annoying head bob - its subtle, tasteful and makes the experience feel more polished. Also an update for Dynamic Camera is in the works that will further improve [Full Body Awareness](https://www.nexusmods.com/morrowind/mods/56625) experience.
 
@@ -83,13 +84,13 @@ If you would like NPCs to also have alternating attack animations - try [3rd Per
 
 ## 𖤝 Mod compatibility
 
-**[Full Body Awareness](https://www.nexusmods.com/morrowind/mods/56625) (FBA)** is supported through two optional archives in this mod's Nexus files:
-- **ReAnimation FBA Compatibility**: ReAnimation's animations merged with FBA's, so your legs and body move with them.
-- **FBA 1st-Person Hands**: puts the vanilla 1st-person hands back and adapts FBA's own animations to them.
+**[Full Body Awareness](https://www.nexusmods.com/morrowind/mods/56625) (FBA)** is supported through **FBA Compatibility**, an option in this mod's installer (the `01 FBA Compatibility` folder): ReAnimation's animations merged with FBA's, so your legs and body move with them. It also requires FBA's **First Person Hands** patch, from [FBA's mod page](https://www.nexusmods.com/morrowind/mods/56625?tab=files): it puts the 1st-person hands back and adapts FBA's own animations to them.
 
-Install both like any other mod. Load order: FBA -> FBA 1st-Person Hands -> ReAnimation -> ReAnimation FBA Compatibility, and enable `FBA_1stPersonHands.omwaddon` after FBA's plugin.
+Load order: FBA -> FBA's First Person Hands -> ReAnimation (`00 Core`) -> `01 FBA Compatibility`, and enable the First Person Hands plugin after FBA's.
 
 To merge other animation mods with FBA, or rebuild with different settings, use the script that comes with ReAnimation: `Sources/Tools/FBACompat/build_compat.py` (see its [README](Sources/Tools/FBACompat/README.md)).
+
+**[Improved Thrown Weapon Projectiles](https://www.nexusmods.com/morrowind/mods/44763)** makes thrown weapons fly point first and spin, but in OpenMW its knives and stars turn 90 degrees in your hand while you throw or draw them. This mod's installer has a fix for it (it also flies the stars flat and spins everything faster), with fixed versions of its patches for Iron Mesh Improvements, Improved Weapon Meshes (Steel, Ebony, Organic) and Glass Glowset - install Improved Thrown Weapon Projectiles itself, but none of its patches. Details in [Sources/Tools/ThrownFix](Sources/Tools/ThrownFix/README.md).
 
 In general Reanimation is compatible with practically any other animation mod. ReAnimation uses OpenMW system of animation overrides and will only override a specific set of animations. Recommended to use with [MCAR](https://www.nexusmods.com/morrowind/mods/48628) for delightfull swimming and casting animations, but will work just fine without it. MCAR should be situated in a load order before ReAnimation.
 

@@ -7,13 +7,18 @@ motion, the player gets stuck (the engine falls back to FBA's 3rd-person velocit
 This keeps our upper body and takes the lower body (Bip01, Pelvis, Spine, legs - OpenMW's
 LowerBody blend layer) from the 3rd-person kf. Every group gets its own segment on a new
 timeline, since groups sharing a time range in our kf (forward/back, idle1h/idleshield...) need
-different legs. Text keys move with their group; relative timings are kept exactly.
+different legs. Text keys move with their group; relative timings are kept exactly. The new timeline
+starts where the file does: the thrown weapon's files sit at vanilla's 48.7 s, because OpenMW runs a
+held thrown weapon's own mesh controllers (a baked flight spin) on the group's absolute time.
 
 * Locomotion (walk/run/sneak): the 3rd-person time is warped so its SoundGen Left/Right markers
   land on ours, same foot to same foot, with a smooth monotone (PCHIP) curve between them. When
   the step counts per loop differ, the segment spans the least common multiple of both, so our
   loop repeats and both sides loop seamlessly. Root motion comes with the warped 3rd-person Bip01.
   Without usable markers on either side it falls back to a plain loop-to-loop stretch.
+  Strafes whose 3rd-person stride is much shorter than the forward one (STRAFE_SPEED_FIX) play our
+  part at half speed: the engine plays a movement as fast as its root motion needs to keep up, so
+  those step quickly, and our upper body swung along at the same pace.
 * Everything else (idles, attacks, equip, jump, hits...): the matching 3rd-person group, warped
   piecewise-linearly through the text keys both share, section by section (chop, slash, equip...).
   Attack tails blend from the 3rd-person follow-through's end into the idle; groups with no match
@@ -50,6 +55,18 @@ HIP_MOTION = 0.5
 # Use the weapon's idle legs in attack/equip sections where the 3rd-person pose lifts both feet off
 # the floor (FBA's crossbow reload, once the torso is held upright).
 IDLE_WHEN_FEET_LIFT = True
+# Strafing animation speed fix. A step lasts its stride over the movement speed in game, and the speed
+# is the same in every direction, so the stride per step tells how quick a 3rd-person strafe's steps
+# are next to its forward one. At STRAFE_STRIDE_SHARE of the forward stride or less (FBA's run strafes
+# are at half), our part of the strafe plays at half speed: one of our steps to two of the legs'.
+STRAFE_SPEED_FIX = True
+STRAFE_STRIDE_SHARE = 2.0 / 3.0
+# Rewrites of our group names before the 3rd-person group is looked up, in order: [(regex, text)].
+# For sets named their own way, e.g. a katar's "runforwardkatar" walking on "runforwardhh" legs.
+ALIASES = []
+# Text keys that mark our footsteps. SoundGenRef sounds nothing: sets that play over another one,
+# which sounds the steps, mark theirs that way.
+STEP_MARKERS = ('soundgen', 'soundgenref')
 # Print per-group detail while building (-v); warnings are collected in WARNINGS either way.
 VERBOSE = False
 IDENTITY = (1.0, 0.0, 0.0, 0.0)
@@ -113,9 +130,9 @@ def group_keys(lines, group):
     return keys
 
 
-# Text keys that are not animation groups: "SoundGen: Left", "Sound: crossbowshoot". They travel with
-# whatever group they sit in.
-NOT_GROUPS = ('soundgen', 'sound')
+# Text keys that are not animation groups: "SoundGen: Left", "SoundGenRef: Left", "Sound: crossbowshoot".
+# They travel with whatever group they sit in.
+NOT_GROUPS = STEP_MARKERS + ('sound',)
 
 
 def all_group_keys(lines):
@@ -127,6 +144,13 @@ def all_group_keys(lines):
             if g not in NOT_GROUPS:
                 out.setdefault(g, {})[k] = tm
     return out
+
+
+def lookup_name(name):
+    """Our group name as the 3rd-person groups are looked up by (ALIASES applied)."""
+    for pattern, text in ALIASES:
+        name = re.sub(pattern, text, name)
+    return name
 
 
 def their_group_for(name, their_groups):
@@ -258,13 +282,15 @@ class Group:
         self.loop_start = k.get('loop start', self.start)
         self.loop_stop = k.get('loop stop', self.stop)
         self.period = self.loop_stop - self.loop_start
+        self.marker = 'SoundGen'  # as our step keys are written, for the ones the strafe fix writes
         steps = {}
         for tm, line in lines:
             if ':' not in line:
                 continue
             g, foot = split_line(line)
-            if g != 'soundgen' or foot not in ('left', 'right'):
+            if g not in STEP_MARKERS or foot not in ('left', 'right'):
                 continue
+            self.marker = line.split(':', 1)[0].strip()
             if self.loop_start - EPS <= tm <= self.loop_stop + EPS:
                 phase = (tm - self.loop_start) % self.period
                 if self.period - phase < EPS:
@@ -363,19 +389,33 @@ class Warp:
                 + (-2 * t3 + 3 * t2) * self.ys[hi] + (t3 - t2) * h * self.m[hi])
 
 
+class Slowed:
+    """Our loop as the legs see it when it plays at 1/slow speed: slow times as long, with its steps
+    repeated slow times, so the legs keep their pace while our part swings once per slow loops."""
+
+    def __init__(self, ours, slow):
+        self.name = ours.name
+        self.period = ours.period * slow
+        self.steps = [(phase + r * ours.period, foot) for r in range(slow) for phase, foot in ours.steps]
+
+
 class LocomotionSegment:
-    """Our intro, our loop repeated, our outro; legs and root motion from the warped 3rd person."""
+    """Our intro, our loop repeated, our outro; legs and root motion from the warped 3rd person.
+    With slow > 1 our loop plays at 1/slow speed (the strafing animation speed fix)."""
     sway = SWAY
 
-    def __init__(self, ours, theirs, theirs_kf, offset):
+    def __init__(self, ours, theirs, theirs_kf, offset, slow=1):
         self.name = ours.name
         self.ours = ours
         self.theirs = theirs
         self.theirs_kf = theirs_kf
-        self.warp = Warp(ours, theirs)
+        self.slow = slow
+        self.stepped = Slowed(ours, slow) if slow > 1 else ours
+        self.warp = Warp(self.stepped, theirs)
         self.offset = offset
         self.intro = ours.loop_start - ours.start
-        self.loop_len = self.warp.our_loops * ours.period
+        self.loop_period = ours.period * slow  # one of our loops, as played
+        self.loop_len = self.warp.our_loops * self.loop_period
         self.length = self.intro + self.loop_len + (ours.stop - ours.loop_stop)
         root = theirs_kf.data('Bip01')
         self.root_a = E.translation(root, theirs.loop_start)
@@ -394,7 +434,8 @@ class LocomotionSegment:
         if g.start - EPS <= t < g.loop_start:
             return [t - g.start]
         if g.loop_start <= t <= g.loop_stop + EPS:
-            return [self.intro + (t - g.loop_start) + r * g.period for r in range(self.warp.our_loops)]
+            return [self.intro + (t - g.loop_start) * self.slow + r * self.loop_period
+                    for r in range(self.warp.our_loops)]
         if g.loop_stop < t <= g.stop + EPS:
             return [self.intro + self.loop_len + (t - g.loop_stop)]
         return []
@@ -405,9 +446,16 @@ class LocomotionSegment:
             return g.start + tau
         if tau <= self.intro + self.loop_len + EPS:
             ph = tau - self.intro
-            r = min(int(ph // g.period), self.warp.our_loops - 1)
-            return g.loop_start + min(ph - r * g.period, g.period)
+            r = min(int(ph // self.loop_period), self.warp.our_loops - 1)
+            return g.loop_start + min(ph - r * self.loop_period, self.loop_period) / self.slow
         return g.loop_stop + (tau - self.intro - self.loop_len)
+
+    def step_keys(self):
+        """[(output-local time, foot)] of the legs' steps in the loop, for a slowed segment: our own
+        step keys there mark half as many steps as the legs take."""
+        steps = self.stepped.steps
+        return [(self.intro + r * self.loop_period + phase, foot)
+                for r in range(self.warp.our_loops) for phase, foot in steps]
 
     def their_time(self, tau):
         """(time in the 3rd-person kf, completed 3rd-person loops) for output-local tau."""
@@ -434,7 +482,7 @@ class LocomotionSegment:
         ts.add(round(self.length, 6))
         ts.add(round(self.intro, 6))
         for r in range(self.warp.our_loops + 1):
-            ts.add(round(self.intro + r * self.ours.period, 6))
+            ts.add(round(self.intro + r * self.loop_period, 6))
         for t in extra_source_times:
             for tau in self.local_times_of(t):
                 if 0 <= tau <= self.length + EPS:
@@ -443,9 +491,10 @@ class LocomotionSegment:
 
     def describe(self):
         w = self.warp
-        return 'our loop %.3fs x%d, their loop %.3fs x%d, steps %d/%d' % (
-            self.ours.period, w.our_loops, self.theirs.period, w.their_loops,
-            len(self.ours.steps), len(self.theirs.steps))
+        return 'our loop %.3fs x%d, their loop %.3fs x%d, steps %d/%d%s' % (
+            self.loop_period, w.our_loops, self.theirs.period, w.their_loops,
+            len(self.stepped.steps), len(self.theirs.steps),
+            ', ours at 1/%d speed (strafe fix)' % self.slow if self.slow > 1 else '')
 
 
 # ---- everything else --------------------------------------------------------------------
@@ -519,7 +568,8 @@ class StillSegment:
     its own legs, with a warning."""
     sway = 0.0
 
-    def __init__(self, name, keys, ours_kf, theirs_kf, their_groups, offset):
+    def __init__(self, name, keys, ours_kf, theirs_kf, their_groups, offset, lookup=None):
+        """lookup: our name as the 3rd-person groups are looked up by (lookup_name)."""
         self.name = name
         self.keys = keys
         self.ours_kf = ours_kf
@@ -528,7 +578,8 @@ class StillSegment:
         self.start = min(keys.values())
         self.stop = max(keys.values())
         self.length = self.stop - self.start
-        idle_name = idle_group_for(name, their_groups)
+        lookup = lookup or name
+        idle_name = idle_group_for(lookup, their_groups)
         idle = their_groups[idle_name]
         self.idle_start = idle['start']
         self.idle_period = idle['stop'] - idle['start']
@@ -536,7 +587,7 @@ class StillSegment:
         self.notes = []
         self.own = False
         self.ik_miss = [0.0]
-        target = their_group_for(name, their_groups)
+        target = their_group_for(lookup, their_groups)
         if target is not None:
             warps = key_warps(name, keys, their_groups[target])
             if warps is None:
@@ -560,8 +611,8 @@ class StillSegment:
                 self.spans.append((warp.start, warp.end,
                                    lambda t, w=warp: their_lower_pose(theirs_kf, w(t)), lunge))
                 self.notes.append('%s%s' % (target, (' ' + section) if section else ''))
-        elif name.endswith('extra'):
-            base = their_group_for(name[:-len('extra')], their_groups)
+        elif lookup.endswith('extra'):
+            base = their_group_for(lookup[:-len('extra')], their_groups)
             for k, t0 in keys.items():
                 if not k.endswith('tail start'):
                     continue
@@ -706,6 +757,29 @@ def add_rest_bones(ours_kf, reference):
         warn('%s not keyed, merged from the rig rest pose' % ', '.join(added))
 
 
+def stride(kf, group):
+    """Horizontal root travel per step over a 3rd-person group's loop."""
+    a = E.translation(kf.data('Bip01'), group.loop_start)
+    b = E.translation(kf.data('Bip01'), group.loop_stop)
+    return math.hypot(b[0] - a[0], b[1] - a[1]) / len(group.steps)
+
+
+def strafe_slowdown(target, theirs, their_lines, their_groups, theirs_kf):
+    """2 for a strafe whose 3rd-person stride is at most STRAFE_STRIDE_SHARE of its forward one, else 1."""
+    m = LOCOMOTION.match(target)
+    if not (STRAFE_SPEED_FIX and m and m.group(2) in ('left', 'right') and theirs.steps_usable()):
+        return 1
+    forward = m.group(1) + 'forward' + target[m.end():]
+    if 'start' not in their_groups.get(forward, {}) or 'stop' not in their_groups[forward]:
+        return 1
+    ahead = Group(their_lines, forward)
+    if not ahead.steps_usable():
+        return 1
+    share = stride(theirs_kf, theirs) / stride(theirs_kf, ahead)
+    info('  %s: stride %.0f%% of %s' % (target, 100 * share, forward))
+    return 2 if share <= STRAFE_STRIDE_SHARE + EPS else 1
+
+
 def build(ours_path, theirs_path, out_path, reference=None):
     """Merges one kf. Returns its segments, or None when no group was recognised (nothing written)."""
     import os
@@ -732,10 +806,12 @@ def build(ours_path, theirs_path, out_path, reference=None):
     names = sorted(our_groups, key=lambda g: (min(our_groups[g].values()), g))
 
     segments = []
-    offset = 0.0
+    # The output starts where the file does (see the top of this file).
+    offset = min(our_groups[names[0]].values())
     for name in names:
         keys = our_groups[name]
-        target = their_group_for(name, their_groups)
+        lookup = lookup_name(name)
+        target = their_group_for(lookup, their_groups)
         if LOCOMOTION.match(name) and 'start' in keys and 'stop' in keys and target is not None:
             ours = Group(our_lines, name)
             theirs = Group(their_lines, target)
@@ -745,16 +821,19 @@ def build(ours_path, theirs_path, out_path, reference=None):
                 if not theirs.steps_usable():
                     # The foot heights are too close to call (runrighthh): trust the markers.
                     theirs.steps = labelled
+            slow = 1
             if not (ours.steps_usable() and theirs.steps_usable()):
                 warn('%s: no usable step markers (ours %d, theirs %d), stretched loop to loop'
                      % (name, len(ours.steps), len(theirs.steps)))
                 ours.steps = [(0.0, 'loop')]
                 theirs.steps = [(0.0, 'loop')]
-            seg = LocomotionSegment(ours, theirs, theirs_kf, offset)
+            else:
+                slow = strafe_slowdown(target, theirs, their_lines, their_groups, theirs_kf)
+            seg = LocomotionSegment(ours, theirs, theirs_kf, offset, slow)
             seg.sway = SWAY  # the setting at build time, not at import
             seg.mean_sway = mean_sway(ours_kf, seg)
         else:
-            seg = StillSegment(name, keys, ours_kf, theirs_kf, their_groups, offset)
+            seg = StillSegment(name, keys, ours_kf, theirs_kf, their_groups, offset, lookup)
         segments.append(seg)
         offset += seg.length + SEGMENT_GAP
     if all(getattr(seg, 'own', False) for seg in segments):
@@ -826,14 +905,15 @@ def build(ours_path, theirs_path, out_path, reference=None):
     end = segments[-1].offset + segments[-1].length
     for t, p in ours_kf.blocks:
         if t == 'NiKeyframeController':
-            p['start'] = 0.0
+            p['start'] = segments[0].offset
             p['stop'] = end
 
     # Text keys: each group's own keys, plus every key not naming one of our groups (footsteps,
-    # sounds) from its range, per segment.
+    # sounds) from its range, per segment. A slowed strafe's loop gets the legs' steps instead of ours.
     sep = '\r\n' if any('\r\n' in s for _, s in ours_kf.text_keys()) else '\n'
     by_time = {}
     for seg in segments:
+        slowed = getattr(seg, 'slow', 1) > 1
         for tm, line in our_lines:
             if ':' in line:
                 name, key = split_line(line)
@@ -842,11 +922,20 @@ def build(ours_path, theirs_path, out_path, reference=None):
             if name == seg.name:
                 tau = seg.group_key_time(key)
                 taus = [tau] if tau is not None else seg.local_times_of(tm)[:1]
+            elif slowed and name in STEP_MARKERS and key in ('left', 'right') and (
+                    seg.ours.loop_start - EPS <= tm <= seg.ours.loop_stop + EPS):
+                continue
             elif name not in our_groups:
                 taus = seg.local_times_of(tm)
             else:
                 continue
             for tau in taus:
+                lines = by_time.setdefault(round(seg.offset + tau, 5), [])
+                if line not in lines:
+                    lines.append(line)
+        if slowed:
+            for tau, foot in seg.step_keys():
+                line = '%s: %s' % (seg.ours.marker, foot.capitalize())
                 lines = by_time.setdefault(round(seg.offset + tau, 5), [])
                 if line not in lines:
                     lines.append(line)

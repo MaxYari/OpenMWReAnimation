@@ -4,7 +4,7 @@ Some exported animations need their text keys adjusted after every Blender expor
 markers sit on whole frames, so these fixes can't be made in the .blend without changing the
 animation. `kf_postfix.json` lists the files that get patched and what is done to each.
 
-**After exporting any .kf into `Animations/`, run:**
+**After exporting any .kf into `00 Core/Animations/`, run:**
 
 ```
 python3 Sources/Tools/KFPostfix/kf_postfix.py check

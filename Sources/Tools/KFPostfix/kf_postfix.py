@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.join(HERE, '..', 'FBACompat'))
 from nifkf import KF  # noqa: E402
 
 MANIFEST = os.path.join(HERE, 'kf_postfix.json')
-ANIM_DIRS = ['Animations/xbase_anim.1st']
+ANIM_DIRS = ['00 Core/Animations/xbase_anim.1st']
 SAME_TIME = 1e-5
 
 HIT_KEY = re.compile(r'^(shoot) release$|^(chop|slash|thrust) hit$')

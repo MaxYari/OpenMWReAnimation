@@ -53,7 +53,7 @@ env:
   NEXUSMODS_MOD_ID: "429496782196" # internal mod ID, not the one from the page URL
   FILE_DISPLAY_NAME: ReAnimation v3 - Complete - OpenMW
   ZIP_NAME: ReAnimation
-  VERSION_SOURCE: scripts/MaxYari/ReAnimation_v3/ReAnimationAPI.lua
+  VERSION_SOURCE: 00 Core/scripts/MaxYari/ReAnimation_v3/ReAnimationAPI.lua
 
 jobs:
   nexus:

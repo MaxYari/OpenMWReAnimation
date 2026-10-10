@@ -1,7 +1,7 @@
 {
   "epsilon": 0.001,
   "files": {
-    "Animations/xbase_anim.1st/xCrossbowShoot.kf": {
+    "00 Core/Animations/xbase_anim.1st/xCrossbowShoot.kf": {
       "op": "separate-follow-start",
       "why": "Shoot Release, Sound: CrossbowShoot and Shoot Follow Start share frame 26, so the release key and the shot sound fire twice",
       "source_sha256": "00b25774a8cd2ec0a87d0560355d38ab0fa5d7893109da925e67b49dd9a7fd5d",
@@ -11,7 +11,7 @@
       "patched_sha256": "a3e42c6b1e23cdabc84ca43e21210fa3eb1b988d039736e5e0373443a10b0632",
       "patched_at": "2026-09-15"
     },
-    "Animations/xbase_anim.1st/xThrownKnifeThrow.kf": {
+    "00 Core/Animations/xbase_anim.1st/xThrownKnifeThrow.kf": {
       "ops": [
         "separate-follow-start",
         "align-time"
@@ -28,7 +28,7 @@
       "patched_sha256": "d270643cb2c1cf9a0aee9c7355dfd6602adf90ba16cca33a0c4b192246560754",
       "patched_at": "2026-09-26"
     },
-    "Animations/xbase_anim.1st/xThrownKnifeThrowAlt.kf": {
+    "00 Core/Animations/xbase_anim.1st/xThrownKnifeThrowAlt.kf": {
       "op": "separate-follow-start",
       "why": "Shoot Release and Shoot Follow Start share frame 10, so the release key fires twice",
       "source_sha256": "84d6c819c49d071874a4d8e4e07a19d0e704535463872e0cc0d6a30583a75227",
@@ -38,7 +38,7 @@
       "patched_sha256": "9aea3f23ff384397621fc35e5554209f9882dc5ded5238b907a4512d4468f011",
       "patched_at": "2026-09-26"
     },
-    "Animations/xbase_anim.1st/xThrownStarThrow.kf": {
+    "00 Core/Animations/xbase_anim.1st/xThrownStarThrow.kf": {
       "op": "separate-follow-start",
       "why": "Shoot Release and Shoot Follow Start share frame 10, so the release key fires twice",
       "source_sha256": "39d1184dfc59e72f804569cd1cff7497868407fbdcdf713170c652ec4bca82c0",
@@ -48,7 +48,7 @@
       "patched_sha256": "0e034bc2d0c84112f396a3f4d78e5421a47a49455bd97e62294576575b30024c",
       "patched_at": "2026-09-15"
     },
-    "Animations/xbase_anim.1st/xThrownStarThrowAlt.kf": {
+    "00 Core/Animations/xbase_anim.1st/xThrownStarThrowAlt.kf": {
       "op": "separate-follow-start",
       "why": "Shoot Release and Shoot Follow Start share frame 10, so the release key fires twice",
       "source_sha256": "e9df7b0372692c510496bc1aff52e8fa0dba963bd050aa618dc9fe15cab7061c",
@@ -58,7 +58,7 @@
       "patched_sha256": "a6d377b53bbee7b1f97fc86ae1eb7adcca576e0f4e773c53fd0041872ecd4726",
       "patched_at": "2026-09-15"
     },
-    "Animations/xbase_anim.1st/xThrownKnifeEqUneq.kf": {
+    "00 Core/Animations/xbase_anim.1st/xThrownKnifeEqUneq.kf": {
       "ops": [
         "align-time"
       ],

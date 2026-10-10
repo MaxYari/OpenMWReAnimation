@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The installer mod organisers show. The archive - and the git repository, which has the same
+     layout - also works for BAIN and for installing by hand: "00 Core" is the mod, every other
+     numbered folder an optional patch (tools/build_nexus_zip.sh). -->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://qconsulting.ca/fo3/ModConfig5.0.xsd">
+    <moduleName>ReAnimation v3 - Complete</moduleName>
+    <moduleImage path="fomod/images/reanimation.png" />
+    <requiredInstallFiles>
+        <folder source="00 Core" destination="" />
+    </requiredInstallFiles>
+    <installSteps order="Explicit">
+        <installStep name="Full Body Awareness">
+            <optionalFileGroups order="Explicit">
+                <group name="Full Body Awareness" type="SelectAny">
+                    <plugins order="Explicit">
+                        <plugin name="FBA Compatibility">
+                            <description>For OpenMW Full Body Awareness (https://www.nexusmods.com/morrowind/mods/56625), which shows your whole body in first person: ReAnimation's first-person animations with FBA's legs, hips and movement, so your body walks, runs and lunges with them instead of standing in the first-person pose.
+
+Requires OpenMW Full Body Awareness. Leave this unticked if you don't use it.</description>
+                            <image path="fomod/images/fba.png" />
+                            <files>
+                                <folder source="01 FBA Compatibility" destination="" priority="1" />
+                            </files>
+                            <typeDescriptor>
+                                <type name="Optional" />
+                            </typeDescriptor>
+                        </plugin>
+                    </plugins>
+                </group>
+            </optionalFileGroups>
+        </installStep>
+        <installStep name="Improved Thrown Weapon Projectiles">
+            <optionalFileGroups order="Explicit">
+                <group name="Improved Thrown Weapon Projectiles fix" type="SelectAny">
+                    <plugins order="Explicit">
+                        <plugin name="Improved Thrown Weapon Projectiles - OpenMW fix">
+                            <description>For R-Zero's Improved Thrown Weapon Projectiles (https://www.nexusmods.com/morrowind/mods/44763), which makes thrown weapons fly point first and the knives and stars spin. In OpenMW its knives and stars turn 90 degrees in your hand while you throw or draw them; this fixes that, flies the stars flat instead of on edge, and spins everything faster.
+
+Improved Thrown Weapon Projectiles has to be installed (its main files - the darts come from there), before this mod. Its Patches folder and its Glass Glowset patch are not needed: the next page has fixed versions of all of them.
+
+Leave this unticked if you don't use Improved Thrown Weapon Projectiles.</description>
+                            <image path="fomod/images/thrown_fix.png" />
+                            <files>
+                                <folder source="02 Thrown Weapon Projectiles Fix" destination="" priority="2" />
+                            </files>
+                            <conditionFlags>
+                                <flag name="thrown_fix">On</flag>
+                            </conditionFlags>
+                            <typeDescriptor>
+                                <type name="Optional" />
+                            </typeDescriptor>
+                        </plugin>
+                    </plugins>
+                </group>
+            </optionalFileGroups>
+        </installStep>
+        <installStep name="Improved Thrown Weapon Projectiles - other weapon meshes">
+            <visible>
+                <flagDependency flag="thrown_fix" value="On" />
+            </visible>
+            <optionalFileGroups order="Explicit">
+                <group name="Tick the ones you have installed" type="SelectAny">
+                    <plugins order="Explicit">
+                        <plugin name="Iron Mesh Improvements">
+                            <description>For Psymoniser's Iron Mesh Improvements (https://www.nexusmods.com/morrowind/mods/34844): the iron throwing knife to match its iron weapons.
+
+Replaces Improved Thrown Weapon Projectiles' own patch for it, which you don't need to install.</description>
+                            <files>
+                                <folder source="03 Thrown Fix - Iron Mesh Improvements" destination="" priority="3" />
+                            </files>
+                            <typeDescriptor>
+                                <type name="Optional" />
+                            </typeDescriptor>
+                        </plugin>
+                        <plugin name="Improved Weapon Meshes - Steel">
+                            <description>For Pherim's Improved Weapon Meshes - Steel (https://www.nexusmods.com/morrowind/mods/43120): the steel throwing knife, star and dart to match its steel weapons.
+
+Replaces Improved Thrown Weapon Projectiles' own patches for it, which you don't need to install. The steel throwing knife only uses this mesh with a plugin that fixes the vanilla record, such as Improved Weapon Meshes - Steel's "Steel Throwing Knife_fix.esp".</description>
+                            <files>
+                                <folder source="04 Thrown Fix - Improved Weapon Meshes Steel" destination="" priority="4" />
+                            </files>
+                            <typeDescriptor>
+                                <type name="Optional" />
+                            </typeDescriptor>
+                        </plugin>
+                        <plugin name="Improved Weapon Meshes - Ebony">
+                            <description>For Pherim's Improved Weapon Meshes - Ebony (https://www.nexusmods.com/morrowind/mods/43484): the ebony star and dart to match its ebony weapons.
+
+Replaces Improved Thrown Weapon Projectiles' own patches for it, which you don't need to install.</description>
+                            <files>
+                                <folder source="05 Thrown Fix - Improved Weapon Meshes Ebony" destination="" priority="5" />
+                            </files>
+                            <typeDescriptor>
+                                <type name="Optional" />
+                            </typeDescriptor>
+                        </plugin>
+                        <plugin name="Improved Weapon Meshes - Organic">
+                            <description>For Pherim's Improved Weapon Meshes - Organic (https://www.nexusmods.com/morrowind/mods/47892): the chitin star to match its chitin weapons.
+
+Replaces Improved Weapon Meshes - Organic's own "Improved Thrown Weapons Patch", which you don't need to install.</description>
+                            <files>
+                                <folder source="06 Thrown Fix - Improved Weapon Meshes Organic" destination="" priority="6" />
+                            </files>
+                            <typeDescriptor>
+                                <type name="Optional" />
+                            </typeDescriptor>
+                        </plugin>
+                        <plugin name="Glass Glowset">
+                            <description>For Solidfire's Glass Glowset (https://www.nexusmods.com/morrowind/mods/42762): the glowing glass throwing knife and star.
+
+Replaces Improved Thrown Weapon Projectiles' "Glass Throwables patch for Glass Glowset", which you don't need to install.</description>
+                            <files>
+                                <folder source="07 Thrown Fix - Glass Glowset" destination="" priority="7" />
+                            </files>
+                            <typeDescriptor>
+                                <type name="Optional" />
+                            </typeDescriptor>
+                        </plugin>
+                    </plugins>
+                </group>
+            </optionalFileGroups>
+        </installStep>
+    </installSteps>
+</config>
