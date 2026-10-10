@@ -16,7 +16,9 @@
                         <plugin name="FBA Compatibility">
                             <description>For OpenMW Full Body Awareness (https://www.nexusmods.com/morrowind/mods/56625), which shows your whole body in first person: ReAnimation's first-person animations with FBA's legs, hips and movement, so your body walks, runs and lunges with them instead of standing in the first-person pose.
 
-Requires OpenMW Full Body Awareness. Leave this unticked if you don't use it.</description>
+Requires OpenMW Full Body Awareness and its First Person Hands patch, from FBA's mod page (https://www.nexusmods.com/morrowind/mods/56625?tab=files). Leave this unticked if you don't use FBA.
+
+Dynamic Camera (https://www.nexusmods.com/morrowind/mods/55327) is highly recommended: its Full Body Awareness Tweaks settings move the camera and limit how far the hands tilt when you look down at your body.</description>
                             <image path="fomod/images/fba.png" />
                             <files>
                                 <folder source="01 FBA Compatibility" destination="" priority="1" />
