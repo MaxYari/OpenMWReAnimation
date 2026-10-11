@@ -20,7 +20,9 @@ ITWP still has to be installed - its darts aren't in here. Its own `Patches` fol
 03 to 05 are those patches fixed (a flat folder of meshes that can't be used as a data path as it is),
 and 04 and 05 also carry its two dart patches, unchanged. 06 is the chitin star from Improved Weapon
 Meshes - Organic's own "04 Improved Thrown Weapons Patch", and 07 the meshes of ITWP's "Glass
-Throwables patch for Glass Glowset" (an optional file on ITWP's page). Each goes after 02.
+Throwables patch for Glass Glowset" (an optional file on ITWP's page). Each goes after 02, and
+ReAnimation has to load after ITWP and after those mesh mods: they ship their own, unfixed, copies of
+the same meshes.
 
 The space in "w_steel_star .nif" is not a typo: Morrowind.esm spells the mesh that way. The steel
 throwing knife only uses w_steel_knife with a plugin that fixes the vanilla record (it points at the

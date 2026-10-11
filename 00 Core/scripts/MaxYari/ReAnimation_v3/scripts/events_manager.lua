@@ -1,7 +1,7 @@
 -- Author: ChatGPT 2024
 
 -- Define the EventsManager class
-EventsManager = {}
+local EventsManager = {}
 EventsManager.__index = EventsManager
 
 -- Constructor for creating a new EventsManager instance

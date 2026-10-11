@@ -26,8 +26,6 @@ local animations = {}
 local trackedAnims = {}
 local trackedAnims_n = 0
 
-local stance = nil
-
 local ATTACK_TYPES = { "chop", "slash", "thrust", "shoot" }
 
 -- Key-triggered animations (see "Key-triggered animation handling" below)
@@ -199,13 +197,16 @@ end
 -- True while some override is playing over groupname with the parent hidden (blendMask 0).
 -- Reads anim.enabled rather than anim.running on purpose: running is cleared by onUpdate the moment
 -- the parent stops, which is the same moment the follow-through text keys are being delivered,
--- whereas enabled is only rewritten by the next attack's wind up.
+-- whereas enabled is only rewritten by the next attack's wind up. A set for another view or stance
+-- is skipped: the handler never asks it, so its enabled is still the one from its last attack.
 local function isParentHidden(groupname)
     local anims = animations[groupname]
     if not anims then return false end
     for i = 1, #anims do
         local anim = anims[i]
-        if anim.hidesParent and anim.enabled then return true end
+        if anim.hidesParent and anim.enabled and isProperArmatureType(anim) and isProperStance(anim) then
+            return true
+        end
     end
     return false
 end
@@ -486,17 +487,26 @@ local function addAnimationOverride(anim)
     end
 end
 
+-- Removes every override with this id: one registered with several parents is a copy per parent.
+-- A running one is stopped here, since onUpdate never sees it again once the tracked list is rebuilt.
 local function removeAnimationOverride(id)
-    if not id then return end    
-    for key, anims in pairs(animations) do
-        for i, anim in ipairs(anims) do
+    if not id then return false end
+    local removed = false
+    for _, anims in pairs(animations) do
+        for i = #anims, 1, -1 do
+            local anim = anims[i]
             if anim.id == id then
                 table.remove(anims, i)
-                return true
+                removed = true
+                if anim.running then
+                    animation.cancel(omwself, anim.groupname)
+                    anim.running = false
+                end
             end
         end
     end
-    return false
+    if removed then rebuildTrackedAnimsList() end
+    return removed
 end
 
 
@@ -754,10 +764,6 @@ local function addAttackVariants(params)
             end
 
             local steps = self.variants[attackType]
-            if not steps then
-                self.enabled = false
-                return
-            end
 
             -- Restart the sequence at its first step when this attack type has been idle a while,
             -- so a fight always opens on the base attack rather than mid-alternation. Measured from
@@ -796,7 +802,11 @@ local function addAttackVariants(params)
             if startKey == nil then return false end -- A User reported an error there, with startKey being nil. No idea why, but heres a crappy fix anyway.
             local attackType = gutils.isAttackType(startKey)
             -- Unconfigured attack types bail out here, so they never reach the per-section cancel.
-            if not attackType or self.variants[attackType] == nil then return false end
+            -- enabled is cleared for isParentHidden(), as below: the parent plays as it is.
+            if not attackType or self.variants[attackType] == nil then
+                self.enabled = false
+                return false
+            end
 
             -- Caller supplied gate, e.g. "only while a katana is equipped". enabled is cleared
             -- rather than just returning, because preOverride will not run to clear it and
@@ -1088,7 +1098,7 @@ local function settle()
 end
 
 local function onUpdate(dt)
-    if not trackedAnims_n or dt <= 0 then return end
+    if dt <= 0 then return end
     --print("onUpdate called. dt: " .. tostring(dt) .. ", trackedAnims_n: " .. tostring(trackedAnims_n))
     
     frame_n = frame_n + 1    

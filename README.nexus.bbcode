@@ -43,12 +43,9 @@ That show [i]some[/i] of the animations. (Give them some time to load)
 
 [list=1]
 [*]Install the dependency [url=https://www.nexusmods.com/morrowind/mods/60256]Max Yari's Script Services (MSS)[/url] (Most of my lua mods require it now)
-[*]Install this mod [b]With a mod organiser[/b]: Download this repository as an archive and drag and drop it into your mod organiser of choice (e.g [url=https://github.com/ModOrganizer2/modorganizer/releases]Mod Organizer 2[/url] on Windows or [url=https://github.com/grazelandsnomad/nerevarine_organizer/releases/tag/v0.70]Nerevarine Organizer[/url] on Linux).
-[/list]
-
-[b]Or[/b]: [url=https://modding-openmw.com/tips/installing-mods/]read this tutorial[/url] on how to install mods using the launcher or completely manually (it's also very easy). The archive has a [font=Courier New]00 Core[/font] folder, which is the mod, and optional patches next to it: Full Body Awareness compatibility, and a fix for Improved Thrown Weapon Projectiles with its patches (see Mod compatibility below). Mod organisers show an installer that explains them. If you install by hand, add [font=Courier New]00 Core[/font] as the data folder, and the patches you want after it.
-
-[list=1]
+[*]Install this mod. It comes with a FOMOD installer, so [b]with a mod organiser[/b] it should work seamlessly: drag and drop the mod archive into your mod organiser of choice (e.g [url=https://github.com/ModOrganizer2/modorganizer/releases]Mod Organizer 2[/url] on Windows or [url=https://github.com/grazelandsnomad/nerevarine_organizer/releases/tag/v0.70]Nerevarine Organizer[/url] on Linux), and the installer explains the optional patches.
+[b]To install manually[/b] ([url=https://modding-openmw.com/tips/installing-mods/]this tutorial[/url] explains how, using the launcher or by hand, it's very easy): install the contents of the [font=Courier New]00 Core[/font] folder, that is the mod. The other numbered folders are patches, which you only need if you use the corresponding other mods: Full Body Awareness, and Improved Thrown Weapon Projectiles with its patches (see Mod compatibility below). Add the ones you need after [font=Courier New]00 Core[/font].
+[b]Updating a manual install of an older version[/b]: the mod now lives in [font=Courier New]00 Core[/font], so point your data folder there, and remove the old version's files instead of extracting over them.
 [*]Enable the mod's .omwscript files in "Content Files" tab of the OpenMW launcher ( [font=Courier New]ReAnimation_API[/font] and [font=Courier New]ReAnimation_v3[/font] at the time of writing).
 [*]OpenMW Launcher -> Settings -> Visuals -> Animations: "Use Additional Animation Sources" and "Smooth Animation Transitions" must be enabled!
 [*][i]VERY OPTIONAL[/i]: Setting your view-model (1st-person model) field of view to a higher value makes the first person experience a bit more exciting, note this is not the same as field of view in game settings, you can find how to change it in this [url=https://www.reddit.com/r/OpenMW/comments/1i2dl4r/anyway_to_change_viewmodel_fov/]reddit post[/url]. Try a value of 75 or 70.
@@ -56,13 +53,17 @@ That show [i]some[/i] of the animations. (Give them some time to load)
 [*]PROFIT (Play)
 [/list]
 
-[i]NOTE #0[/i]: If you want to use this with [url=https://www.nexusmods.com/morrowind/mods/56625]Full Body Awareness[/url] now theres a compatibility patch, read below in Mod Compatibility section for details.
+[i]NOTE #0[/i]: If you want to use this with [url=https://www.nexusmods.com/morrowind/mods/56625]Full Body Awareness[/url] now theres a compatibility patch, an option in the installer, read below in Mod Compatibility section for details.
 
-[i]NOTE #1[/i]: In Morrowind Mod Organiser you might see a dialog box with a "The contents of <data files> does not look valid" error, this is fine and expected, Mod Organiser is just not aware of how additional animations work in OpenMW, you can safely press OK without changing anything.
+[i]NOTE #1[/i]: In Morrowind Mod Organiser you might see a dialog box with a "The contents of [font=Courier New]<data files>[/font] does not look valid" error, this is fine and expected, Mod Organiser is just not aware of how additional animations work in OpenMW, you can safely press OK without changing anything.
 
 [i]NOTE #2[/i]: OpenMW camera 1st person head-bob (the one that can be enabled in scripts in-game) may slightly conflict with the walk cycle animation, it's not too bad, but the mod was developed assuming that setting is turned off.
 
-[i]NOTE #3[/i]: If you [i]only[/i] want to use ReAnimation as an API  for another mod (i.e only as a dependency that doesnt add any animations on its own) - only enable [font=Courier New]ReAnimation_API[/font] AND delete "Animations" folder from within this mod's [font=Courier New]00 Core[/font].
+[i]NOTE #3[/i]: If you [i]only[/i] want to use ReAnimation as an API  for another mod (i.e only as a dependency that doesnt add any animations on its own) - only enable [font=Courier New]ReAnimation_API[/font] AND delete "Animations" folder from within this mod's [font=Courier New]00 Core[/font]. MSS is still required.
+
+[size=4][b]Performance[/b][/size]
+
+This mod was optimised to hell and back and quite likely will have a 0 performance impact in your setup, but if you are running a Lua-heavy modlist (with or without this mod) and experiencing occasional stutters - install [url=https://www.nexusmods.com/morrowind/mods/58557]RubicOn Lua optimiser[/url] - usually it just magically solves all Lua-related performance issues.
 
 [size=5][b]𖤝 Mod suggestions[/b][/size]
 
@@ -78,11 +79,11 @@ If you would like NPCs to also have alternating attack animations - try [url=htt
 
 [b][url=https://www.nexusmods.com/morrowind/mods/56625]Full Body Awareness[/url] (FBA)[/b] is supported through [b]FBA Compatibility[/b], an option in this mod's installer (the [font=Courier New]01 FBA Compatibility[/font] folder): ReAnimation's animations merged with FBA's, so your legs and body move with them. It also requires FBA's [b]First Person Hands[/b] patch, from [url=https://www.nexusmods.com/morrowind/mods/56625?tab=files]FBA's mod page[/url]: it puts the 1st-person hands back and adapts FBA's own animations to them.
 
-Load order: FBA -> FBA's First Person Hands -> ReAnimation ([font=Courier New]00 Core[/font]) -> [font=Courier New]01 FBA Compatibility[/font], and enable the First Person Hands plugin after FBA's.
+Load order: FBA -> FBA's First Person Hands -> ReAnimation (installed by hand: [font=Courier New]00 Core[/font], then [font=Courier New]01 FBA Compatibility[/font]), and enable the First Person Hands plugin after FBA's.
 
-To merge other animation mods with FBA, or rebuild with different settings, use the script that comes with ReAnimation: [font=Courier New]Sources/Tools/FBACompat/build_compat.py[/font] (see its [url=https://github.com/MaxYari/OpenMWReAnimation/blob/main/Sources/Tools/FBACompat/README.md]README[/url]).
+To merge other animation mods with FBA, or rebuild with different settings, use the script in this mod's archive (the installer doesn't install it): [font=Courier New]Sources/Tools/FBACompat/build_compat.py[/font] (see its [url=https://github.com/MaxYari/OpenMWReAnimation/blob/main/Sources/Tools/FBACompat/README.md]README[/url]).
 
-[b][url=https://www.nexusmods.com/morrowind/mods/44763]Improved Thrown Weapon Projectiles[/url][/b] makes thrown weapons fly point first and spin, but in OpenMW its knives and stars turn 90 degrees in your hand while you throw or draw them. This mod's installer has a fix for it (it also flies the stars flat and spins everything faster), with fixed versions of its patches for Iron Mesh Improvements, Improved Weapon Meshes (Steel, Ebony, Organic) and Glass Glowset - install Improved Thrown Weapon Projectiles itself, but none of its patches. Details in [url=https://github.com/MaxYari/OpenMWReAnimation/blob/main/Sources/Tools/ThrownFix/README.md]Sources/Tools/ThrownFix[/url].
+[b][url=https://www.nexusmods.com/morrowind/mods/44763]Improved Thrown Weapon Projectiles[/url][/b] makes thrown weapons fly point first and spin, but in OpenMW its knives and stars turn 90 degrees in your hand while you throw or draw them. This mod's installer has a fix for it (it also flies the stars flat and spins everything faster), with fixed versions of its patches for Iron Mesh Improvements, Improved Weapon Meshes (Steel, Ebony, Organic) and Glass Glowset. Install Improved Thrown Weapon Projectiles itself, but none of those thrown weapon patches: neither its own nor Improved Weapon Meshes - Organic's. [b]ReAnimation has to load after Improved Thrown Weapon Projectiles[/b], and after the weapon mesh mods you picked patches for: they all ship their own, unfixed, copies of these meshes. Details in the [url=https://github.com/MaxYari/OpenMWReAnimation/blob/main/Sources/Tools/ThrownFix/README.md]thrown fix's README[/url].
 
 In general Reanimation is compatible with practically any other animation mod. ReAnimation uses OpenMW system of animation overrides and will only override a specific set of animations. Recommended to use with [url=https://www.nexusmods.com/morrowind/mods/48628]MCAR[/url] for delightfull swimming and casting animations, but will work just fine without it. MCAR should be situated in a load order before ReAnimation.
 

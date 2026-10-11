@@ -16,26 +16,6 @@ local function removeOnKeyHandler(cb)
     events:removeEventHandler(cb)
 end
 
-local Animation = {}
-
-function Animation:play(groupname, opts)
-    local anim = {
-        groupname = groupname,
-        opts = opts
-    }
-
-    I.AnimationController.playBlendedAnimation(anim.groupname, anim.opts)
-
-    setmetatable(anim, self)
-    self.__index = self
-
-    return anim
-end
-
-function Animation:cancel()
-    animation.cancel(omwself, self.groupname)
-end
-
 --- Playing-state tracking -----------------------------------------------------------------------
 -- The engine keeps an animation "state" per group. isPlaying() below means "a state exists", which
 -- is broader than animation.isPlaying(): a group played with autoDisable = false keeps its state
@@ -120,31 +100,11 @@ local function isPlaying(groupname)
 end
 
 
-
-function Animation:isPlaying()
-    return isPlaying(self.groupname)
-end
-
-function Animation:addOnKeyHandler(cb)
-    self.eventHandler = function(groupname, key)
-        if groupname == self.groupname then
-            cb(groupname, key)
-        end
-    end
-    addOnKeyHandler(self.eventHandler)
-end
-
-function Animation:removeOnKeyHandler()
-    if not self.eventHandler then return end
-    removeOnKeyHandler(self.eventHandler)
-end
-
 I.AnimationController.addTextKeyHandler(nil, function(...)
     events:emit(...)
 end)
 
 local module = {
-    Animation = Animation,
     isPlaying = isPlaying,
     addOnKeyHandler = addOnKeyHandler,
     removeOnKeyHandler = removeOnKeyHandler,

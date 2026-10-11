@@ -7,11 +7,21 @@ plus a slight forward chest lean so the body doesn't fill the screen when lookin
 
 It always starts from the original animations, so rebuilding never stacks changes.
 
+## What you need
+
+- Python 3.8 or newer. Nothing else: only Python's standard library is used.
+- The downloaded ReAnimation archive, extracted. Mod managers install only the mod and the patches
+  you pick, not `Sources/`, so the script is only in the archive. Run it there: it finds
+  `00 Core` next to it.
+
 ## Run it
 
 ```
 python3 Sources/Tools/FBACompat/build_compat.py
 ```
+
+On Windows the command is `py` instead of `python3`, or double-click `build_compat.py`: the window
+asks the questions below and stays open at the end until you press Enter.
 
 It asks for each setting with the default filled in. Press Enter to keep a default, or pass `-y`
 to accept all of them without being asked. Any setting can also be given on the command line:
@@ -21,10 +31,21 @@ python3 Sources/Tools/FBACompat/build_compat.py -y --hip-motion 1.0
 ```
 
 `-v` prints per-group detail while building; without it you get one line per file, then warnings.
+It prints which FBA animations it used, since that folder is found by itself.
+
+Everything is built in a temporary folder and copied to the output only at the end, so a build that
+fails or is closed halfway leaves the output as it was. Kfs an earlier build left in the output that
+this one no longer makes are deleted from `01 FBA Compatibility`, and only listed for an output
+folder of your own. Kfs that key no leg bone (the shield and torch arm overlays) have no legs to
+merge and are left out.
+
+It refuses to convert animations that are already converted: those whose data folder has
+`ReAnimation_FBA_Compatibility.txt`, like a mod manager's ReAnimation installed with the FBA option
+ticked. Point `--anims` at the archive's `00 Core/Animations/xbase_anim.1st` instead.
 
 | Option | Default | What it does |
 |---|---|---|
-| `--fba DIR` | found via `openmw.cfg` or the mods folder | FBA's folder (the one containing `meshes/xbase_anim.1st.kf`). |
+| `--fba DIR` | found via `openmw.cfg` or the mods folder | FBA's folder (the one containing `meshes/xbase_anim.1st.kf`). In `openmw.cfg` the last enabled `data=` line with FBA wins. |
 | `--anims DIR` | this mod's `00 Core/Animations/xbase_anim.1st` | The animations to convert. |
 | `--out DIR` | this mod's `01 FBA Compatibility/Animations/xbase_anim.1st` | Where the converted animations go. |
 | `--lean DEG` | `15` | Extra forward chest lean. The neck counter-rotates, so the view and arms stay as animated. |
@@ -60,15 +81,27 @@ sounds the steps).
 
 ## Install the result
 
-Add the output's parent folder (`01 FBA Compatibility`) as a data folder **after**
-ReAnimation's `00 Core` and FBA - or tick "FBA Compatibility" in the installer, which ships it built
-with the defaults. Its `ReAnimation_FBA_Compatibility.txt` is how ReAnimation's scripts know it's
-installed.
+The installer's "FBA Compatibility" option already ships it built with the defaults; this is for a
+build of your own.
+
+Converting ReAnimation's own animations also writes `ReAnimation_FBA_Compatibility.txt` next to the
+output's `Animations` folder: it is how ReAnimation's scripts know the patch is installed. (With an
+output that isn't an `Animations/xbase_anim.1st` folder, copy it there yourself from
+`01 FBA Compatibility`.)
+
+- **By hand:** add the output's data folder (`01 FBA Compatibility` by default) as a data folder
+  **after** ReAnimation's `00 Core` and FBA.
+- **With a mod manager:** install the output's data folder as a mod of its own, after ReAnimation.
+  For example, zip the `Animations` folder and `ReAnimation_FBA_Compatibility.txt` from
+  `01 FBA Compatibility` and install the zip, or build straight into a new mod's folder with
+  `--out "<mod manager's mods folder>/ReAnimation FBA (my build)/Animations/xbase_anim.1st"`. Leave
+  the installer's FBA option unticked, or your build has to load after it.
 
 ## Other scripts here
 
-- `check_all.py [kf names]` compares the built animations with the originals (spine and neck drift,
-  chest lean, foot heights, root motion, which foot steps where).
-- `fba_fingers.py <FBA folder> <Morrowind Data Files> <output>` builds the separate
-  **FBA 1st-Person Hands** package, which restores the vanilla 1st-person hands and converts FBA's
-  own animations to their fingers.
+- `check_all.py [--anims DIR] [--out DIR] [kf names]` compares the built animations with the
+  originals (spine and neck drift, chest lean, foot heights, root motion, which foot steps where).
+  The defaults are ReAnimation's `00 Core` and `01 FBA Compatibility`.
+- `fba_fingers.py [-y] [--fba DIR] [--data DIR] [--out DIR]` builds a 1st-person hands package for
+  FBA: the vanilla 1st-person hand meshes back, and FBA's own animations converted to their fingers.
+  FBA's First Person Hands patch does the same, so you only need this to build it yourself.

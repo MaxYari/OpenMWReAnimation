@@ -220,16 +220,20 @@ local function thrownShieldOptions(self, pOptions)
 end
 
 
-local KATANA_ID_TERMS ={ "katana", "scythe", "gravedigger", "bloodrust", "lightsaber" }
+local KATANA_TERMS = { "katana", "scythe", "gravedigger", "bloodrust", "lightsaber" }
 
 -- Throwing stars, as opposed to the knives, darts, javelins and axes that share the throwweapon
 -- group. A single term is enough here: every star in Morrowind + Tribunal + Bloodmoon (15 of 15)
--- and in Tamriel Data (57 of 57) has "star" in its record id, and nothing else does.
-local STAR_ID_TERMS = { "star" }
+-- and in Tamriel Data (57 of 57) has "star" in its record id and its mesh, and no other thrown
+-- weapon does.
+local STAR_TERMS = { "star" }
 
--- Weapon ids never change what they are, so the matching runs once per distinct weapon and is a
--- single table lookup thereafter. Each table gains one small entry per weapon ever equipped.
-local function weaponIdMatcher(terms)
+-- A weapon matches when a term is in its record id or its mesh path. The mesh is what sees a weapon
+-- enchanted in game: its generated record has an id of its own ("generated:0x..."), but keeps the
+-- mesh of the weapon it was made from. Neither changes for a given item, so the matching - the record
+-- lookup included - runs once per distinct weapon and is a single table lookup thereafter. Each
+-- table gains one small entry per weapon ever equipped.
+local function weaponMatcher(terms)
     local cache = {}
     return function()
         local id = I.ReAnimation.getEquippedWeaponId()
@@ -237,9 +241,14 @@ local function weaponIdMatcher(terms)
 
         local cached = cache[id]
         if cached == nil then
+            -- From the item, not the id: a generated record only resolves by its own id's case
+            -- (see equippedWeaponType below).
+            local item = I.ReAnimation.getEquippedWeapon()
+            local record = item and types.Weapon.objectIsInstance(item) and types.Weapon.record(item)
+            local model = string.lower(record and record.model or "")
             cached = false
             for i = 1, #terms do
-                if string.find(id, terms[i], 1, true) then
+                if string.find(id, terms[i], 1, true) or string.find(model, terms[i], 1, true) then
                     cached = true
                     break
                 end
@@ -251,8 +260,8 @@ local function weaponIdMatcher(terms)
     end
 end
 
-local isKatana = weaponIdMatcher(KATANA_ID_TERMS)
-local isThrowingStar = weaponIdMatcher(STAR_ID_TERMS)
+local isKatana = weaponMatcher(KATANA_TERMS)
+local isThrowingStar = weaponMatcher(STAR_TERMS)
 
 -- Same idea for the off hand. This one is polled hard: idleshield's stopCondition runs every frame
 -- while it is playing, which with a shield equipped is most of the time. Uncached it cost a
@@ -304,6 +313,9 @@ local animations = {
         groupname = "bowandarrow1",
         armatureType = I.ReAnimation.ARMATURE_TYPE.FirstPerson,
         condition = function(self)
+            -- Polled every frame in 1st-person weapon stance: with anything but a bow, stop at the
+            -- cached weapon type (MSS equipment cache) before the two engine reads below.
+            if equippedWeaponType() ~= types.Weapon.TYPE.MarksmanBow then return false end
             local shootHoldTime = animation.getTextKeyTime(omwself, "bowandarrow: shoot max attack")
             local currentTime = animation.getCurrentTime(omwself, "bowandarrow")
 
@@ -687,10 +699,11 @@ I.ReAnimation.addAltAttackAnimations({
 --
 -- What we actually want is "is this weapon built on a katana mesh", which no single name fragment
 -- expresses: the scythes are enchanted dai-katanas, and Gravedigger, Bloodrust and Raphalas' Sword
--- are uniques named after nothing in particular. These four terms cover every such weapon in
--- Morrowind + Tribunal + Bloodmoon (7 of 7) and in Tamriel Data (17 of 17), with no false hits.
--- A modded katana under some other name would fall through to the claymore set and simply chop
--- like a claymore.
+-- are uniques named after nothing in particular. The terms, on the record id or the mesh, cover
+-- every such weapon in Morrowind + Tribunal + Bloodmoon (7 of 7) and in Tamriel Data (17 of 17),
+-- with no false hits among all 280 two-handed weapons there; on the mesh they also catch one
+-- enchanted in game. A modded katana on a mesh of its own, under some other name, falls through to
+-- the claymore set and simply chops like a claymore.
 
 
 I.ReAnimation.addAttackVariants({

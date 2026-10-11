@@ -6,19 +6,20 @@ carries head, camera and arms: ~0, or the kept swing in locomotion), how far the
 turned (the lean), the feet's height range, and root motion (velocity in locomotion, none else).
 Locomotion also shows which foot is lower at each step marker ('!' when it is the other one).
 
-Usage: python3 check_all.py [kf names...]
+Usage: python3 check_all.py [--anims DIR] [--out DIR] [kf names...]
 """
+import argparse
 import math
 import os
-import sys
 
 import kfeval as E
 import nifkf
-from build_compat import SRC, OUT, ALL_KFS, REFERENCE
+from build_compat import SRC, OUT, REFERENCE, find_reference, kf_names
 from fba_merge import LOCOMOTION, Group, all_group_keys, text_lines
 from fba_posture import pose_rotation, pose_translation
 
-_reference = nifkf.KF.load(os.path.join(SRC, REFERENCE))
+# The rig pose for bones a kf does not key, set by main().
+_reference = None
 
 
 class _World:
@@ -41,19 +42,18 @@ class _World:
 
 
 E.world = _World.world
-MERGED = ALL_KFS
 
 
 def horizontal(a, b):
     return math.hypot(b[0] - a[0], b[1] - a[1])
 
 
-def check(name):
-    ours = nifkf.KF.load(os.path.join(SRC, name))
-    if not os.path.exists(os.path.join(OUT, name)):
+def check(name, anims, built):
+    ours = nifkf.KF.load(os.path.join(anims, name))
+    if not os.path.exists(os.path.join(built, name)):
         print('== %s: not in the compat folder' % name)
         return
-    out = nifkf.KF.load(os.path.join(OUT, name))
+    out = nifkf.KF.load(os.path.join(built, name))
     our_lines, out_lines = text_lines(ours), text_lines(out)
     our_groups, out_groups = all_group_keys(our_lines), all_group_keys(out_lines)
     print('== %s' % name)
@@ -77,9 +77,10 @@ def check(name):
             turn.append(E.qangle(E.world(out, 'Bip01 Spine2', t)[0], E.world(ours, 'Bip01 Spine2', to)[0]))
         lz = [E.world(out, 'Bip01 L Foot', t)[1][2] for t in ts]
         rz = [E.world(out, 'Bip01 R Foot', t)[1][2] for t in ts]
-        root = out.data('Bip01')
+        # Bip01 from the rig reference when the kf does not key it (the bow set).
+        root = lambda t: pose_translation(out, _reference, 'Bip01', t)
         if loco and b > a:
-            motion = 'vel %6.1f' % (horizontal(E.translation(root, a), E.translation(root, b)) / (b - a))
+            motion = 'vel %6.1f' % (horizontal(root(a), root(b)) / (b - a))
             steps = []
             for phase, foot in gm.steps:
                 t = a + phase
@@ -87,11 +88,26 @@ def check(name):
                 steps.append('%s%s' % (foot[0].upper(), '' if (l < r) == (foot == 'left') else '!'))
             motion += ' steps ' + ''.join(steps)
         else:
-            motion = 'root xy %.2f' % max(math.hypot(*E.translation(root, t)[:2]) for t in ts)
+            motion = 'root xy %.2f' % max(math.hypot(*root(t)[:2]) for t in ts)
         print('  %-24s spine %5.2f neck %5.2f | chest turned %4.1f..%4.1f | feet z L %5.1f..%5.1f R %5.1f..%5.1f | %s'
               % (g, spine, neck, min(turn), max(turn), min(lz), max(lz), min(rz), max(rz), motion))
 
 
+def main():
+    global _reference
+    p = argparse.ArgumentParser(description='Compares built FBA compatibility kfs with the originals.')
+    p.add_argument('names', nargs='*', metavar='KF', help='kf names (default: every kf in --anims)')
+    p.add_argument('--anims', metavar='DIR', default=SRC, help="the original animations (default: ReAnimation's)")
+    p.add_argument('--out', metavar='DIR', default=OUT, help='the converted ones (default: 01 FBA Compatibility)')
+    a = p.parse_args()
+    names = a.names or kf_names(a.anims)
+    if os.path.exists(os.path.join(a.anims, REFERENCE)):
+        _reference = nifkf.KF.load(os.path.join(a.anims, REFERENCE))
+    else:
+        _reference = find_reference(a.anims, names)[1]
+    for n in names:
+        check(n, a.anims, a.out)
+
+
 if __name__ == '__main__':
-    for n in sys.argv[1:] or MERGED:
-        check(n)
+    main()

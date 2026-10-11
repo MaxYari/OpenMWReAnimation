@@ -531,8 +531,8 @@ def feet_leave_floor(theirs_kf, warp, samples=40):
 
 
 def key_section(key):
-    first = key.split()[0]
-    return first if first in SECTION_WORDS else ''
+    words = key.split()
+    return words[0] if words and words[0] in SECTION_WORDS else ''
 
 
 def key_warps(group, ours_keys, theirs_keys):
@@ -791,6 +791,10 @@ def build(ours_path, theirs_path, out_path, reference=None):
             raise ValueError('3rd-person kf has no %s' % b)
     if not ours_kf.text_keys():
         warn('no text keys, not merged')
+        return None
+    if not any(b in ours_kf.bone_data for b in LOWER_BONES):
+        # An overlay on part of the upper body (the shield and torch arms): no legs to give it.
+        info('  keys no lower body bone, not merged')
         return None
     if reference is not None:
         add_rest_bones(ours_kf, reference)

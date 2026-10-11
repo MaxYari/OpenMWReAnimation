@@ -18,7 +18,8 @@ a few passes). The ring and little fingers, which the 3rd-person rig does not ha
 Output folder: meshes/<the FBA 1st-person kfs, converted> and a plugin restoring the vanilla
 1st-person hand parts. Load both after FBA.
 
-Usage: python3 fba_fingers.py <FBA folder> <Morrowind Data Files> <output folder>
+Usage: python3 fba_fingers.py [-y] [--fba DIR] [--data DIR] [--out DIR]
+Folders not given are asked for, with the one found in openmw.cfg (or the mods folder) filled in.
 """
 import math
 import os
@@ -366,6 +367,9 @@ if __name__ == '__main__':
     p.add_argument('--out', metavar='DIR', help='where the package goes')
     a = p.parse_args()
     params.USE_DEFAULTS = a.yes
-    main(ask(a.fba, 'FBA folder', 'The one with meshes/xbase_anim.1st.kf.', params.find_fba(), str),
-         ask(a.data, 'Morrowind Data Files', 'The one with Morrowind.bsa.', params.find_data_files(), str),
-         ask(a.out, 'Output folder', 'Load it after FBA.', os.path.join(params.MODS, 'FBA 1st-Person Hands'), str))
+    params.keep_console_open()
+    folders = (ask(a.fba, 'FBA folder', 'The one with meshes/xbase_anim.1st.kf.', params.find_fba, str),
+               ask(a.data, 'Morrowind Data Files', 'The one with Morrowind.bsa.', params.find_data_files, str),
+               ask(a.out, 'Output folder', 'Load it after FBA.', os.path.join(params.MODS, 'FBA 1st-Person Hands'), str))
+    print('FBA: %s\nData Files: %s\nOutput: %s' % folders)
+    main(*folders)

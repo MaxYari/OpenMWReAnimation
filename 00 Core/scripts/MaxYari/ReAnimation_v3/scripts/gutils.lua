@@ -542,17 +542,6 @@ local function wasMyTarget(actor)
 end
 module.wasMyTarget = wasMyTarget
 
-local function isMyFriend(actor)
-    local sameType = true
-    if types.NPC.objectIsInstance(omwself) and not types.NPC.objectIsInstance(actor) then
-        sameType = false
-    end
-    local fightVal = types.Actor.stats.ai.fight(actor)
-    return actor.id ~= omwself.id and not types.Player.objectIsInstance(actor) and sameType and
-        not wasMyTarget(actor) and fightVal.modified >= BaseFriendFightVal
-end
-module.isMyFriend = isMyFriend
-
 local function stringStartsWith(String, Start)
     -- Source: https://stackoverflow.com/questions/22831701/lua-read-beginning-of-a-string
     -- Author: https://stackoverflow.com/users/542190/filmor

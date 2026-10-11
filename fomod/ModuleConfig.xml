@@ -38,7 +38,7 @@ Dynamic Camera (https://www.nexusmods.com/morrowind/mods/55327) is highly recomm
                         <plugin name="Improved Thrown Weapon Projectiles - OpenMW fix">
                             <description>For R-Zero's Improved Thrown Weapon Projectiles (https://www.nexusmods.com/morrowind/mods/44763), which makes thrown weapons fly point first and the knives and stars spin. In OpenMW its knives and stars turn 90 degrees in your hand while you throw or draw them; this fixes that, flies the stars flat instead of on edge, and spins everything faster.
 
-Improved Thrown Weapon Projectiles has to be installed (its main files - the darts come from there), before this mod. Its Patches folder and its Glass Glowset patch are not needed: the next page has fixed versions of all of them.
+Improved Thrown Weapon Projectiles has to be installed (its main files - the darts come from there), and ReAnimation has to load after it, or its unfixed meshes win. Its Patches folder and its Glass Glowset patch are not needed: the next page has fixed versions of all of them.
 
 Leave this unticked if you don't use Improved Thrown Weapon Projectiles.</description>
                             <image path="fomod/images/thrown_fix.png" />
@@ -61,12 +61,12 @@ Leave this unticked if you don't use Improved Thrown Weapon Projectiles.</descri
                 <flagDependency flag="thrown_fix" value="On" />
             </visible>
             <optionalFileGroups order="Explicit">
-                <group name="Tick the ones you have installed" type="SelectAny">
+                <group name="Tick the ones you have installed, and load ReAnimation after them" type="SelectAny">
                     <plugins order="Explicit">
                         <plugin name="Iron Mesh Improvements">
                             <description>For Psymoniser's Iron Mesh Improvements (https://www.nexusmods.com/morrowind/mods/34844): the iron throwing knife to match its iron weapons.
 
-Replaces Improved Thrown Weapon Projectiles' own patch for it, which you don't need to install.</description>
+Replaces Improved Thrown Weapon Projectiles' own patch for it, which you don't need to install. Load ReAnimation after Iron Mesh Improvements, or its own unfixed mesh wins.</description>
                             <files>
                                 <folder source="03 Thrown Fix - Iron Mesh Improvements" destination="" priority="3" />
                             </files>
@@ -77,7 +77,7 @@ Replaces Improved Thrown Weapon Projectiles' own patch for it, which you don't n
                         <plugin name="Improved Weapon Meshes - Steel">
                             <description>For Pherim's Improved Weapon Meshes - Steel (https://www.nexusmods.com/morrowind/mods/43120): the steel throwing knife, star and dart to match its steel weapons.
 
-Replaces Improved Thrown Weapon Projectiles' own patches for it, which you don't need to install. The steel throwing knife only uses this mesh with a plugin that fixes the vanilla record, such as Improved Weapon Meshes - Steel's "Steel Throwing Knife_fix.esp".</description>
+Replaces Improved Thrown Weapon Projectiles' own patches for it, which you don't need to install. Load ReAnimation after Improved Weapon Meshes - Steel, or its own unfixed mesh wins. The steel throwing knife only uses this mesh with a plugin that fixes the vanilla record, such as Improved Weapon Meshes - Steel's "Steel Throwing Knife_fix.esp".</description>
                             <files>
                                 <folder source="04 Thrown Fix - Improved Weapon Meshes Steel" destination="" priority="4" />
                             </files>
@@ -88,7 +88,7 @@ Replaces Improved Thrown Weapon Projectiles' own patches for it, which you don't
                         <plugin name="Improved Weapon Meshes - Ebony">
                             <description>For Pherim's Improved Weapon Meshes - Ebony (https://www.nexusmods.com/morrowind/mods/43484): the ebony star and dart to match its ebony weapons.
 
-Replaces Improved Thrown Weapon Projectiles' own patches for it, which you don't need to install.</description>
+Replaces Improved Thrown Weapon Projectiles' own patches for it, which you don't need to install. Load ReAnimation after Improved Weapon Meshes - Ebony, or its own unfixed mesh wins.</description>
                             <files>
                                 <folder source="05 Thrown Fix - Improved Weapon Meshes Ebony" destination="" priority="5" />
                             </files>
@@ -99,7 +99,7 @@ Replaces Improved Thrown Weapon Projectiles' own patches for it, which you don't
                         <plugin name="Improved Weapon Meshes - Organic">
                             <description>For Pherim's Improved Weapon Meshes - Organic (https://www.nexusmods.com/morrowind/mods/47892): the chitin star to match its chitin weapons.
 
-Replaces Improved Weapon Meshes - Organic's own "Improved Thrown Weapons Patch", which you don't need to install.</description>
+Replaces Improved Weapon Meshes - Organic's own "Improved Thrown Weapons Patch", which you don't need to install. Load ReAnimation after Improved Weapon Meshes - Organic, or its own unfixed mesh wins.</description>
                             <files>
                                 <folder source="06 Thrown Fix - Improved Weapon Meshes Organic" destination="" priority="6" />
                             </files>
@@ -110,7 +110,7 @@ Replaces Improved Weapon Meshes - Organic's own "Improved Thrown Weapons Patch",
                         <plugin name="Glass Glowset">
                             <description>For Solidfire's Glass Glowset (https://www.nexusmods.com/morrowind/mods/42762): the glowing glass throwing knife and star.
 
-Replaces Improved Thrown Weapon Projectiles' "Glass Throwables patch for Glass Glowset", which you don't need to install.</description>
+Replaces Improved Thrown Weapon Projectiles' "Glass Throwables patch for Glass Glowset", which you don't need to install. Load ReAnimation after Glass Glowset, or its own unfixed mesh wins.</description>
                             <files>
                                 <folder source="07 Thrown Fix - Glass Glowset" destination="" priority="7" />
                             </files>
