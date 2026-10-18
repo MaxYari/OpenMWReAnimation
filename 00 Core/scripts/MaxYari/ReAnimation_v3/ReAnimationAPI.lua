@@ -1106,12 +1106,7 @@ local function onUpdate(dt)
         settlePending = false
         settle()
     end
-    if trackedAnims_n <= 0 then return end
-
-    -- Stance and view brought up to date before the walk below, not by the first play in it: an
-    -- override this loop starts goes through the playBlended handler, and a change it noticed there
-    -- rebuilt trackedAnims under the loop, which then indexed past its end.
-    checkActorStates()
+    if trackedAnims_n <= 0 then return end   
 
     for i = trackedAnims_n, 1, -1 do
         local anim = trackedAnims[i]
