@@ -92,6 +92,9 @@ from params import ask, yes_no  # noqa: E402
 # Third-person skeleton folder -> vanilla's kf for it. Beasts load theirs over the humans'.
 SKELETONS = {'xbase_anim': 'meshes\\xbase_anim.kf', 'xbase_animkna': 'meshes\\xbase_animkna.kf',
              'xbase_anim_female': 'meshes\\xbase_anim_female.kf'}
+# ...and its skeleton: the bones there are, which a kf keying any other gets a warning for, each time
+# an actor loads it (animation.cpp, addSingleAnimSource).
+SKELETON_MESHES = {skeleton: kf[:-len('.kf')] + '.nif' for skeleton, kf in SKELETONS.items()}
 # Skeletons whose animations the engine loads over the base one's (npcanimation.cpp, updateNpcBase):
 # beasts, whose own set is nearly whole, and women, whose own is a few groups.
 LAYERS = {'xbase_animkna': 'xbase_anim', 'xbase_anim_female': 'xbase_anim'}
@@ -203,6 +206,7 @@ BREATH_SKEW = 0.4       # breathing in takes less of the breath than breathing o
 SHRUG = 1.5             # the shoulders lift by this many times what the chest turns
 PLANT_ATTACKS = True    # attacks keep the actor in place: their root travel goes on the pelvis
 HELD_MOTION = 0.1       # share of a walk's torso motion on the lower spine, which an attack held over it rides
+ARM_FACING = 0.0        # share of the way the arms face that they keep while a walk's torso moves under them
 FACE_FORWARD = 0.9      # share of a walk's average hip turn (a strafe's) its lower spine turns back to the stance's
 MAX_TWIST = 45.0        # degrees the shoulders turn against the hips before the hips turn with them (0: never)
 TWIST_SOFTNESS = 12.0   # degrees: how gradually the hips' share of the twist grows around MAX_TWIST
@@ -248,6 +252,20 @@ def bsa_files(path, wanted):
     missing = set(wanted) - set(out)
     if missing:
         sys.exit('%s has no %s' % (path, ', '.join(sorted(missing))))
+    return out
+
+
+def node_names(nif):
+    """The names of a .nif's NiNodes - a skeleton's bones. Found by each NiNode block's start (its type
+    name, then its own name) rather than by reading every block: skeletons hold properties and shapes
+    there is no reader for here."""
+    tag = struct.pack('<I', len('NiNode')) + b'NiNode'
+    out = set()
+    at = nif.find(tag)
+    while at >= 0:
+        size, = struct.unpack_from('<I', nif, at + len(tag))
+        out.add(nif[at + len(tag) + 4:at + len(tag) + 4 + size].decode('latin-1'))
+        at = nif.find(tag, at + 1)
     return out
 
 
@@ -930,6 +948,7 @@ class Segment:
         self.repoint = 0.0
         self.lower_by = 0.0
         self.bounce = 0.0
+        self.bounce_real_time = False  # the bounce in the loop's own time (bounce_arms)
         self.motion = 0.0       # the torso's motion on a walk (move_torso), as a share
         self.nod = 0.0          # degrees it folds forward by through each step
         self.swing = 0.0        # degrees the thorax turns through with the stride, shoulder against leg
@@ -1073,13 +1092,18 @@ def lower_raised_arms(samples, degrees):
             arm_pose[names[3]] = (E.qmul(E.qconj(forearm), hand), arm_pose[names[3]][1])
 
 
-def bounce_arms(seg, taus, samples, strength):
+def bounce_arms(seg, taus, samples, strength, real_time=False):
     """Experimental. The elbows and wrists lag and spring back as the body under them moves: a point
     on a spring and damper at each, following where the animation puts it - the way Blender's
     Wiggle 2 add-on moves bones - run over the loop until it settles into a cycle of its own. That
     cycle is kept, so it loops; the lead-in and tail fade it in and out. `strength` is the share of
     it used. On a two-handed grip (seg.grip) only the right arm, which holds the weapon, springs; the
-    left then reaches after it so the left hand stays where it was on the weapon (keep_grip)."""
+    left then reaches after it so the left hand stays where it was on the weapon (keep_grip).
+
+    `real_time` steps it through the loop's own time. Without it - as sets were built before it, and
+    still are unless asked - each sample is stepped as a frame; but every key time of the third
+    person's legs is a sample too, three or four to a frame on a forward walk or run, which the spring
+    then sees slowed that many times over and hardly lags behind."""
     if seg.period <= 0 or seg.loops != 1:
         return
     inside = [i for i, tau in enumerate(taus) if seg.lead - 1e-6 <= tau <= seg.lead + seg.period + 1e-6]
@@ -1096,7 +1120,12 @@ def bounce_arms(seg, taus, samples, strength):
 
     stiffness = (2 * math.pi * BOUNCE_HZ) ** 2
     damping = 2 * BOUNCE_DAMPING * 2 * math.pi * BOUNCE_HZ
-    step = 1.0 / (FPS * BOUNCE_SUBSTEPS)
+    if real_time:
+        # In the loop's own time, on an even grid, which its samples are not.
+        steps = max(1, int(round(span_time * FPS * BOUNCE_SUBSTEPS)))
+        step = span_time / steps
+    else:
+        step = 1.0 / (FPS * BOUNCE_SUBSTEPS)
     grip = grip_holds(samples) if seg.grip else None
     moved = set()
     for side in (('R',) if grip is not None else ('L', 'R')):
@@ -1111,18 +1140,16 @@ def bounce_arms(seg, taus, samples, strength):
         rel = [taus[i] - taus[inside[0]] for i in cycle]
         smooth = [[loop_series(rel, [g[joint][axis] for g in goals], span_time, ARM_SMOOTH_HARMONICS)
                    for axis in range(3)] for joint in range(3)]
-        goals = [tuple(tuple(smooth[joint][axis](t) for axis in range(3)) for joint in range(3)) for t in rel]
-        upper_len = math.dist(goals[0][0], goals[0][1])
-        fore_len = math.dist(goals[0][1], goals[0][2])
-        elbow, wrist = list(goals[0][1]), list(goals[0][2])
-        elbow_prev, wrist_prev = elbow[:], wrist[:]
-        kept = {}
-        for lap in range(BOUNCE_LAPS):
-            for j in range(len(cycle)):
-                a, b = goals[j], goals[(j + 1) % len(cycle)]
-                for sub in range(BOUNCE_SUBSTEPS):
-                    f = sub / BOUNCE_SUBSTEPS
-                    shoulder, g_elbow, g_wrist = [lerp(p, q, f) for p, q in zip(a, b)]
+        if real_time:
+            grid = [tuple(tuple(smooth[joint][axis](k * step) for axis in range(3)) for joint in range(3))
+                    for k in range(steps)]
+            upper_len = math.dist(grid[0][0], grid[0][1])
+            fore_len = math.dist(grid[0][1], grid[0][2])
+            elbow, wrist = list(grid[0][1]), list(grid[0][2])
+            elbow_prev, wrist_prev = elbow[:], wrist[:]
+            states = []  # the last lap's (elbow, wrist) after each step: states[k] is at (k + 1) * step
+            for lap in range(BOUNCE_LAPS):
+                for shoulder, g_elbow, g_wrist in grid:
                     for point, prev, goal, anchor, length in (
                             (elbow, elbow_prev, g_elbow, shoulder, upper_len),
                             (wrist, wrist_prev, None, None, fore_len)):
@@ -1136,8 +1163,44 @@ def bounce_arms(seg, taus, samples, strength):
                         new = [s + x * length / norm for s, x in zip(anchor, d)]
                         prev[:] = point
                         point[:] = new
-                if lap == BOUNCE_LAPS - 1:
-                    kept[cycle[(j + 1) % len(cycle)]] = (tuple(elbow), tuple(wrist))
+                    if lap == BOUNCE_LAPS - 1:
+                        states.append((tuple(elbow), tuple(wrist)))
+            kept = {}
+            for i, t in zip(cycle, rel):
+                # Read back at each sample's own time, between the two steps either side of it.
+                x = t / step
+                m = int(math.floor(x))
+                f = x - m
+                before, after = states[(m - 1) % steps], states[m % steps]
+                kept[i] = (tuple(lerp(before[0], after[0], f)), tuple(lerp(before[1], after[1], f)))
+        else:
+            goals = [tuple(tuple(smooth[joint][axis](t) for axis in range(3)) for joint in range(3)) for t in rel]
+            upper_len = math.dist(goals[0][0], goals[0][1])
+            fore_len = math.dist(goals[0][1], goals[0][2])
+            elbow, wrist = list(goals[0][1]), list(goals[0][2])
+            elbow_prev, wrist_prev = elbow[:], wrist[:]
+            kept = {}
+            for lap in range(BOUNCE_LAPS):
+                for j in range(len(cycle)):
+                    a, b = goals[j], goals[(j + 1) % len(cycle)]
+                    for sub in range(BOUNCE_SUBSTEPS):
+                        f = sub / BOUNCE_SUBSTEPS
+                        shoulder, g_elbow, g_wrist = [lerp(p, q, f) for p, q in zip(a, b)]
+                        for point, prev, goal, anchor, length in (
+                                (elbow, elbow_prev, g_elbow, shoulder, upper_len),
+                                (wrist, wrist_prev, None, None, fore_len)):
+                            if goal is None:  # the wrist follows the forearm hung from the moving elbow
+                                goal = tuple(e + (w - ge) for e, w, ge in zip(elbow, g_wrist, g_elbow))
+                                anchor = elbow
+                            velocity = [(p - q) * (1.0 - damping * step) for p, q in zip(point, prev)]
+                            new = [p + v + stiffness * (g - p) * step * step for p, v, g in zip(point, velocity, goal)]
+                            d = [n - s for n, s in zip(new, anchor)]
+                            norm = math.sqrt(sum(x * x for x in d)) or 1.0
+                            new = [s + x * length / norm for s, x in zip(anchor, d)]
+                            prev[:] = point
+                            point[:] = new
+                    if lap == BOUNCE_LAPS - 1:
+                        kept[cycle[(j + 1) % len(cycle)]] = (tuple(elbow), tuple(wrist))
         kept[inside[-1]] = kept[cycle[0]]
         loop_start_value = kept[cycle[0]]
         for i, tau in enumerate(taus):
@@ -1630,7 +1693,7 @@ def stride_phase(seg, taus, samples, cycle, rel, period, drift):
     return phase
 
 
-def move_torso(seg, taus, samples, neck_sway, steady, least_lean, held=0.0, face=0.0):
+def move_torso(seg, taus, samples, neck_sway, steady, least_lean, held=0.0, face=0.0, arm_facing=0.0):
     """The torso's motion on a walk, run or sneak, made from what the legs under it do. A
     first-person walk holds the torso still, rigid on third-person legs; people's bodies move over
     their legs in patterns gait studies agree on:
@@ -1647,7 +1710,9 @@ def move_torso(seg, taus, samples, neck_sway, steady, least_lean, held=0.0, face
 
     All of it from the chest up - the upper body, which the game replaces with whatever it plays
     there over a move: an attack held while running holds its own torso - but for the share `held`,
-    which goes on the lower spine below, so that attack sways a little with the walk. Under it the lower spine,
+    which goes on the lower spine below, so that attack sways a little with the walk. The arms turn with it
+    but for `arm_facing`, the share of the way back to where they faced that they keep - carried along by the
+    shoulders, as they are wherever they point. Under it the lower spine,
     the top bone of the lower body, takes out `steady` of the hips' tilt and twist (Animation
     Compilation's runs pass them up through it whole, and compensate higher up, in bones the first
     person's upper body replaces), so that attack rides a steady base, bobbing with the walk. The legs
@@ -1736,8 +1801,8 @@ def move_torso(seg, taus, samples, neck_sway, steady, least_lean, held=0.0, face
             lean = E.axis_quat(math.radians(seg.stance_lean) / 2 * tilt(p) * w, ahead)
             motion = E.qmul(nod, E.qmul(lean, swing))
             if held > 0:
-                turn_torso(body_pose, arm_pose, E.qslerp(IDENTITY, motion, held), HEAD_STEADY, 0.0, at=SPINE)
-            turn_torso(body_pose, arm_pose, E.qslerp(IDENTITY, motion, 1.0 - held), HEAD_STEADY, 0.0)
+                turn_torso(body_pose, arm_pose, E.qslerp(IDENTITY, motion, held), HEAD_STEADY, arm_facing, at=SPINE)
+            turn_torso(body_pose, arm_pose, E.qslerp(IDENTITY, motion, 1.0 - held), HEAD_STEADY, arm_facing)
         # The neck kept over the line of the walk - `neck_sway` of the hips' own sway to the side - by a
         # side bend of the back that carries the upper body over without tilting it, as people do
         # (most of the trunk's side bending against the pelvis is lumbo-pelvic, Preece et al. 2016
@@ -2137,7 +2202,7 @@ def build(ctx, template_path, first_kf, segments, text, out_path):
             lean_torso(samples, seg.lean)
         if seg.motion or seg.least_lean is not None:
             move_torso(seg, taus, samples, ctx['opts']['neck_sway'], ctx['opts']['steady_spine'], seg.least_lean,
-                       ctx['opts']['held_motion'], ctx['opts']['face_forward'])
+                       ctx['opts']['held_motion'], ctx['opts']['face_forward'], ctx['opts']['arm_facing'])
         if seg.breathe:
             breathe(seg, taus, samples)
         if seg.head_forward is not None:
@@ -2147,7 +2212,7 @@ def build(ctx, template_path, first_kf, segments, text, out_path):
                 if body_pose.get(HEAD, (None, None))[0] is not None:
                     body_pose[HEAD] = (E.qmul(E.qconj(neck_rotation(body_pose)), seg.head_forward), body_pose[HEAD][1])
         if seg.bounce:
-            bounce_arms(seg, taus, samples, seg.bounce)
+            bounce_arms(seg, taus, samples, seg.bounce, seg.bounce_real_time)
         if seg.motion:
             for (body_pose, _), was in zip(samples, spines_was):
                 keep_legs(body_pose, was)
@@ -2223,6 +2288,9 @@ def build(ctx, template_path, first_kf, segments, text, out_path):
             lines.append(line)
     tk = out.blocks[out.textkey_block][1]
     tk['keys'] = [(t, '\r\n'.join(lines)) for t, lines in sorted(by_time.items())]
+    # Bones the skeleton has not: the engine skips them, warning for each every time an actor loads the file.
+    if ctx['bones'] is not None:
+        out.remove_bones([b for b in list(out.bone_data) + out.dataless if b.lower() not in ctx['bones']])
     out.save(out_path)
 
 
@@ -2729,7 +2797,8 @@ def run_skeleton(ctx, skeleton, third, first_files, first_groups, out_dir, opts,
             seg.repoint = repoint_for(stance, opts)
             walking = is_move(group) and paired is not None
             # The arms bounce on a walk of the first person's own only when asked: it moves them already.
-            seg.bounce = bounce_for(stance, opts) if walking and opts['bounce_walks'] else 0.0
+            seg.bounce = bounce_for(stance, opts) if walking and in_stances(stance, opts['bounce_walks']) else 0.0
+            seg.bounce_real_time = in_stances(stance, opts['bounce_real_time'])
             if walking:
                 seg.motion, seg.least_lean = opts['torso_motion'], lean_for(group, opts)
                 seg.nod = move_value(group, opts['torso_nod']) or 0.0
@@ -2871,6 +2940,7 @@ def run_skeleton(ctx, skeleton, third, first_files, first_groups, out_dir, opts,
                     seg.repoint = repoint_for(stance, opts)
                     if is_move(group):
                         seg.bounce = bounce_for(stance, opts)
+                        seg.bounce_real_time = in_stances(stance, opts['bounce_real_time'])
                         seg.motion, seg.least_lean = opts['torso_motion'], lean_for(group, opts)
                         seg.nod = move_value(group, opts['torso_nod']) or 0.0
                         seg.swing = move_value(group, opts['shoulder_swing']) or 0.0
@@ -2964,6 +3034,7 @@ def run_skeleton(ctx, skeleton, third, first_files, first_groups, out_dir, opts,
                 seg.lean = opts['idle_lean'] * (third_lean(src.kf, around[0], around[-1]) - upright(reference))
                 if is_move(group):
                     seg.bounce = bounce_for(stance, opts)
+                    seg.bounce_real_time = in_stances(stance, opts['bounce_real_time'])
                     seg.motion, seg.least_lean = opts['torso_motion'], lean_for(group, opts)
                     seg.nod = move_value(group, opts['torso_nod']) or 0.0
                     seg.swing = move_value(group, opts['shoulder_swing']) or 0.0
@@ -3085,6 +3156,21 @@ def parse_lower(text):
             raise ValueError("expected 'group section=degrees', got %r" % item)
         out.append((words[0], words[1] if len(words) > 1 else None, float(degrees)))
     return out
+
+
+def parse_stances_or_yes_no(value):
+    """y -> None (every stance), n -> nothing, else the stances listed, as parse_moves has them. An
+    answer already parsed (None, a set) is returned as it is."""
+    if value is None or isinstance(value, set):
+        return value
+    if isinstance(value, bool):
+        return None if value else set()
+    word = str(value).strip().lower()
+    if word in ('y', 'yes', 'true', '1', 'on'):
+        return None
+    if word in ('n', 'no', 'false', '0', 'off'):
+        return set()
+    return parse_moves(value)
 
 
 def parse_moves(text):
@@ -3321,6 +3407,9 @@ def main():
                                                           "over them rides steady (default %g)" % STEADY_SPINE)
     p.add_argument('--held-attack-motion', metavar='0..1', help="share of a walk's torso motion an attack held over "
                                                                "it sways with (default %g)" % HELD_MOTION)
+    p.add_argument('--keep-arm-facing', metavar='0..1', help="share of the way the arms face that they keep while a "
+                                                             "walk's torso nods, swings and leans under them, the "
+                                                             "hands carried by the shoulders (default %g)" % ARM_FACING)
     p.add_argument('--face-forward', metavar='0..1', help="share of a walk's average hip turn - a strafe's - its lower "
                                                           "spine turns back to face as the stance idle's does, so an "
                                                           "attack held over it faces forward (default %g)" % FACE_FORWARD)
@@ -3352,8 +3441,12 @@ def main():
                                                         '(default %g)' % ARM_BOUNCE)
     p.add_argument('--arm-bounce-by', metavar='STANCES', help="arm bounce for some weapon types of their own, "
                                                               "e.g. '2w=0.2, hh=0.5' (default: --arm-bounce for all)")
-    p.add_argument('--arm-bounce-walks', metavar='y/n', help="arm bounce on the first person's own walks, runs and "
-                                                             "sneaks too (default n)")
+    p.add_argument('--arm-bounce-real-time', metavar='y/n|STANCES', help="arm bounce in the walk's own time rather "
+                                                                         "than a frame per sample, which hardly bounced "
+                                                                         "a forward walk: y, n or stances (default n, "
+                                                                         "as sets were built before)")
+    p.add_argument('--arm-bounce-walks', metavar='y/n|STANCES', help="arm bounce on the first person's own walks, "
+                                                                     "runs and sneaks too: y, n or stances (default n)")
     p.add_argument('--grip', metavar='y/n', help='two-handed weapons: only the right arm bounces, the left hand '
                                                  'follows it on the grip (default y)')
     p.add_argument('--lower-arms', metavar='SPEC', help="'group section=degrees, ...', e.g. 'spellcast target=15'")
@@ -3371,6 +3464,9 @@ def main():
                                                      'their stance idle (default y)')
     p.add_argument('--prefix', metavar='TEXT', help='put in front of every file name written (default none)')
     p.add_argument('--data-files', metavar='DIR', help="Morrowind's Data Files, with Morrowind.bsa")
+    p.add_argument('--keep-bones', action='store_true',
+                   help="keep the tracks of bones the third-person skeleton lacks, for a build that works on them "
+                        "and leaves them out itself afterwards (default: they are left out)")
     p.add_argument('--jobs', metavar='N', type=int, help='files converted at once (default: one per CPU, %d here)' % JOBS)
     a = p.parse_args()
     started = time.time()
@@ -3381,7 +3477,7 @@ def main():
     settings = ('first', 'skip_files', 'alias', 'third', 'vanilla', 'out', 'beasts', 'women', 'hold_torso', 'steady_head',
                 'third_timing', 'keep_forward', 'point_arms',
                 'two_handed_follow', 'idle_arms', 'lower_arms', 'moves', 'idle_moves', 'idle_sneak', 'idle_lean',
-                'align_steps', 'torso_motion', 'spine_sway', 'torso_nod', 'neck_sway', 'shoulder_swing', 'stance_lean', 'steady_spine', 'held_attack_motion', 'face_forward', 'split_follows', 'start_from_idle', 'align_to_third', 'max_twist', 'straight_starts', 'torso_lean', 'breathing', 'remove_attack_root_motion', 'settle', 'arm_bounce', 'arm_bounce_by', 'arm_bounce_walks', 'grip',
+                'align_steps', 'torso_motion', 'spine_sway', 'torso_nod', 'neck_sway', 'shoulder_swing', 'stance_lean', 'steady_spine', 'held_attack_motion', 'keep_arm_facing', 'face_forward', 'split_follows', 'start_from_idle', 'align_to_third', 'max_twist', 'straight_starts', 'torso_lean', 'breathing', 'remove_attack_root_motion', 'settle', 'arm_bounce', 'arm_bounce_by', 'arm_bounce_walks', 'arm_bounce_real_time', 'grip',
                 'skip', 'legs_from', 'unpaired', 'prefix')
     open_settings = [n for n in settings if getattr(a, n) is None]
     if open_settings and prompting(None):
@@ -3399,18 +3495,25 @@ def main():
     scratch = tempfile.TemporaryDirectory()
     bsa = {}
 
-    def load_vanilla(name, needed):
-        """One of vanilla's kfs from Morrowind.bsa, or None if there is none to read and it is not
+    def vanilla_file(name, needed):
+        """One of vanilla's files from Morrowind.bsa, or None if there is none to read and it is not
         `needed` (a message saying what it would have been for)."""
         if 'files' not in bsa:
             data_files = a.data_files or params.find_data_files()
             path = params.child(data_files, 'Morrowind.bsa') if data_files else None
-            bsa['files'] = bsa_files(path, set(SKELETONS.values()) | {FIRST_PERSON_KF}) if path else None
+            wanted = set(SKELETONS.values()) | set(SKELETON_MESHES.values()) | {FIRST_PERSON_KF}
+            bsa['files'] = bsa_files(path, wanted) if path else None
         if bsa['files'] is None:
             if needed is True:
                 sys.exit('Morrowind.bsa not found from openmw.cfg - give --data-files')
             if needed:
                 print('  (no Morrowind.bsa to read: %s)' % needed)
+            return None
+        return bsa['files'][name]
+
+    def load_vanilla(name, needed):
+        """One of vanilla's kfs from Morrowind.bsa, or None (vanilla_file)."""
+        if vanilla_file(name, needed) is None:
             return None
         path = os.path.join(scratch.name, name.split('\\')[-1])
         if not os.path.isfile(path):
@@ -3669,6 +3772,11 @@ def main():
                       "spine instead of the chest, so an attack held over the walk or run (which replaces the chest "
                       "up) moves with it that much: a little keeps it from riding stiff, much swings it about. The "
                       "walk's own torso moves the same either way. 0.0 holds it steady.", HELD_MOTION, unit)
+    arm_facing = ask(a.keep_arm_facing, 'Arms keep their facing on a walk (0.0 - 1.0)',
+                     "While a walk's torso nods, swings and leans over the legs (the torso motion), the share of the "
+                     "way the arms faced that they keep: 1.0 keeps it, the hands carried along by the shoulders "
+                     "only - arms held forward, a guard or a spell ready, stay pointed ahead as the body swings "
+                     "under them; 0.0 turns them with the torso.", ARM_FACING, unit)
     face = ask(a.face_forward, 'Walks face forward (0.0 - 1.0)',
                "Strafing turns the hips the way it goes - Animation Compilation's (vanilla's) hand-to-hand strafes "
                "by up to 70 degrees, the two-handed sword's 44, the one-handed 16 - and an attack held while "
@@ -3770,10 +3878,18 @@ def main():
                  "On walks, runs and sneaks made from an idle, whose arms would otherwise be held still: the elbows "
                  "and wrists lag behind the body's bob and sway and spring back, as a spring would move them - "
                  "looping as they do. 1.0 is the whole of what the spring does; 0.0 is off.", ARM_BOUNCE, unit)
-    bounce_walks = ask(a.arm_bounce_walks, "Arm bounce on the first person's own walks too (y/n)",
+    # A default comes back as it is (False): through the parser, every answer is a stance set or None.
+    bounce_walks = parse_stances_or_yes_no(ask(a.arm_bounce_walks, "Arm bounce on the first person's own walks too (y/n, or stances)",
                        "The first person's own walks, runs and sneaks move the arms already; y bounces them on top, "
-                       "by the same amount.", False, yes_no)
-    moving = set(idle_made) | ({base_and_stance(g)[1] for g in set_groups if is_move(g)} if bounce_walks else set())
+                       "by the same amount; stances, comma separated, only theirs.", False, parse_stances_or_yes_no))
+    bounce_real_time = parse_stances_or_yes_no(ask(a.arm_bounce_real_time, "Arm bounce in the walk's own time (y/n, or stances)",
+                           "The spring is run over the walk's samples. n steps each as a frame, as sets were built "
+                           "before this setting: a forward walk or run has three or four samples to a frame (every "
+                           "key time of the third person's legs), so its arms barely bounce while the other "
+                           "directions' do. y runs it in the walk's own time, so every walk bounces as much as "
+                           "--arm-bounce says. Stances, comma separated: only theirs.", False, parse_stances_or_yes_no))
+    moving = set(idle_made) | {base_and_stance(g)[1] for g in set_groups
+                               if is_move(g) and in_stances(base_and_stance(g)[1], bounce_walks)}
     moving = [m for m in sorted(moving) if in_moves(m)]
     if a.arm_bounce_by is not None:
         bounce_by = parse_stance_values(a.arm_bounce_by)
@@ -3862,9 +3978,9 @@ def main():
                    for group in [m + s for m in MOVES if m.startswith('sneak')]
                    + ([] if 'idle%ssneak' % s in first_idles else ['idle%ssneak' % s])}
     opts = {'keep': keep, 'fill': fill, 'hold_torso': hold, 'steady_head': steady_head, 'third_timing': third_timing, 'lower': lower, 'repoint': repoint, 'two_handed_follow': two_handed,
-            'bounce': bounce, 'bounce_by': bounce_by, 'bounce_walks': bounce_walks, 'grip': grip, 'moves': moves,
+            'bounce': bounce, 'bounce_by': bounce_by, 'bounce_walks': bounce_walks, 'bounce_real_time': bounce_real_time, 'grip': grip, 'moves': moves,
             'idle_moves': idle_moves, 'idle_sneak': idle_sneak, 'idle_lean': idle_lean, 'sneaks_made': sneaks_made,
-            'align_steps': align, 'spine_sway': spine_sway, 'torso_motion': torso_motion, 'torso_nod': torso_nod, 'neck_sway': neck_sway, 'shoulder_swing': shoulder_swing, 'stance_lean': stance_lean, 'steady_spine': steady, 'held_motion': held_motion, 'face_forward': face, 'max_twist': max_twist, 'start_from_idle': start_idle, 'align': align, 'straight_starts': straight,
+            'align_steps': align, 'spine_sway': spine_sway, 'torso_motion': torso_motion, 'torso_nod': torso_nod, 'neck_sway': neck_sway, 'shoulder_swing': shoulder_swing, 'stance_lean': stance_lean, 'steady_spine': steady, 'held_motion': held_motion, 'arm_facing': arm_facing, 'face_forward': face, 'max_twist': max_twist, 'start_from_idle': start_idle, 'align': align, 'straight_starts': straight,
             'torso_lean': torso_lean, 'breathing': breathing, 'settle': settle_for, 'plant': plant,
             'skip': skip, 'legs_from': legs_from, 'unpaired': unpaired, 'prefix': prefix}
     ctx['opts'] = opts
@@ -3873,7 +3989,7 @@ def main():
     print('\n%d first-person files from %s%s (root and legs where missing: %s); torso held forward for %s, '
           'the first person\'s for the rest%s; the third person\'s timing for %s; keep forward %.2f, arms '
           'pointed %.2f%s; moves made from the idle for %s, sneaks for %s (leaning %.2f as the third person); '
-          'torso motion %.2f (nod %s, shoulder swing %s, stance lean %s, neck sway %.2f, lower spine steady %.2f), leaning at least %s; breathing %g deg; attacks settling over %g s%s; arm bounce %.2f%s%s%s%s%s%s' % (
+          'torso motion %.2f (nod %s, shoulder swing %s, stance lean %s, neck sway %.2f, lower spine steady %.2f, arms keeping %.2f of their facing), leaning at least %s; breathing %g deg; attacks settling over %g s%s; arm bounce %.2f%s%s%s%s%s%s' % (
         len(first_files), first_dir, ' (left out: %s)' % ', '.join(left_out) if left_out else '', reference_label,
         stance_set(hold), ' (head looking straight ahead)' if steady_head else '', stance_set(third_timing),
         keep, repoint, ' (two-handed on the torso)' if two_handed else '', stance_set(idle_moves),
@@ -3881,9 +3997,14 @@ def main():
         listed(['%s %g deg' % (m, torso_nod[m]) for m in ('walk', 'run', 'sneak') if m in torso_nod]),
         listed(['%s %g deg' % (m, shoulder_swing[m]) for m in ('walk', 'run', 'sneak') if m in shoulder_swing]),
         listed(['%s %g deg' % (m, stance_lean[m]) for m in ('walk', 'run', 'sneak') if m in stance_lean]), neck_sway, steady,
+        arm_facing,
         listed(['%s %g deg' % (m, torso_lean[m]) for m in ('walk', 'run', 'sneak') if m in torso_lean]), breathing, settle_for,
         ', in place' if plant else ', root motion kept',
-        bounce, ' (on the first person\'s own walks too)' if bounce_walks else ' (on moves made from an idle)',
+        bounce, (' (on the first person\'s own walks too)' if bounce_walks is None
+                 else ' (on moves made from an idle, and %s\'s own walks)' % stance_set(bounce_walks) if bounce_walks
+                 else ' (on moves made from an idle)')
+        + (' in real time' if bounce_real_time is None
+           else ' in real time for %s' % stance_set(bounce_real_time) if bounce_real_time else ''),
         ''.join(', %s %g' % (m or 'plain', v) for m, v in sorted(bounce_by.items())),
         ' (two-handed: the left hand on the grip)' if grip and bounce else '',
         '' if fill else ', no idle-arm turns, walks and jumps',
@@ -3913,6 +4034,10 @@ def main():
             print('%s: the third-person animations do not key the clavicles, skipped' % skeleton)
             continue
         ctx['lateral'] = lateral_axis(ctx['third_rest'])
+        # The skeleton's bones: the first person's extra finger joints, and toes a human's lacks, left out.
+        mesh = None if a.keep_bones else vanilla_file(SKELETON_MESHES[skeleton],
+                                                      "%s's bones, to leave out what it lacks" % skeleton)
+        ctx['bones'] = {b.lower() for b in node_names(mesh)} if mesh is not None else None
         print('%s: on %s -> %s' % (skeleton, ' + '.join(used), out_dir))
         began = time.time()
         run_skeleton(ctx, skeleton, third, first_files, first_groups, out_dir, opts,

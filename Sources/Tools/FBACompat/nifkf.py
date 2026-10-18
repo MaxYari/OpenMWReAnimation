@@ -237,6 +237,45 @@ class KF:
         self.bone_data[name] = n + 2
         return data
 
+    def remove_bones(self, names):
+        """Drops the tracks of bones `names` (string extra data, controller and keyframe data), out of
+        both chains, renumbering the references to the blocks left. The helper, block 0 and the
+        footer's root, stays where it is."""
+        names = set(names)
+        helper = self.blocks[0][1]
+        chains = {}
+        for head in ('extra', 'ctrl'):
+            chain, i = [], helper[head]
+            while i >= 0:
+                chain.append(i)
+                i = self.blocks[i][1]['next']
+            chains[head] = chain
+        named = [e for e in chains['extra'] if self.blocks[e][0] == 'NiStringExtraData']
+        drop = set()
+        for e, c in zip(named, chains['ctrl']):
+            if self.blocks[e][1]['value'] in names:
+                drop |= {e, c}
+                if self.blocks[c][1]['data'] >= 0:
+                    drop.add(self.blocks[c][1]['data'])
+        if not drop:
+            return
+        new = {}
+        for i in range(len(self.blocks)):
+            if i not in drop:
+                new[i] = len(new)
+        for head, chain in chains.items():
+            kept = [i for i in chain if i not in drop]
+            helper[head] = new[kept[0]] if kept else -1
+            for a, b in zip(kept, kept[1:] + [None]):
+                self.blocks[a][1]['next'] = -1 if b is None else new[b]
+        for c in chains['ctrl']:
+            p = self.blocks[c][1]
+            if c not in drop:
+                p['data'] = new[p['data']] if p['data'] >= 0 else p['data']
+                p['target'] = new[p['target']] if p['target'] >= 0 else p['target']
+        self.blocks = [b for i, b in enumerate(self.blocks) if i not in drop]
+        self._index()
+
     def save(self, path):
         w = Writer()
         w.parts.append(self.header[:-4] + struct.pack('<I', len(self.blocks)))
